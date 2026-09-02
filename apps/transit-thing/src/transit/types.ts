@@ -1,0 +1,41 @@
+export type Mode = 'bus' | 'rail' | 'ferry' | 'tram';
+
+export interface Trip {
+  tripId: string;
+  stopId: string;
+  routeId: string;
+  routeName: string;
+  routeColor: string | null;
+  stopName: string;
+  headsign: string;
+  arrivalTime: number;
+  departureTime: number;
+  isRealtime: boolean;
+}
+
+export interface Stop {
+  stopId: string;
+  stopCode: string;
+  name: string;
+  lat: number;
+  lon: number;
+}
+
+export interface Route {
+  routeId: string;
+  name: string;
+  color: string | null;
+  headsigns: string[];
+}
+
+export interface Slot {
+  stopId: string;
+  stopName: string;
+  routeIds: string[];
+}
+
+export interface TransitSource {
+  subscribe(slot: Slot, onTrips: (trips: Trip[]) => void): () => void;
+  stopsNear(lat: number, lon: number): Promise<Stop[]>;
+  routesAt(stopId: string): Promise<Route[]>;
+}
