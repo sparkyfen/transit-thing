@@ -20,7 +20,10 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
-    "useDefineForClassFields": true
+    "useDefineForClassFields": true,
+    "types": [
+      "bun"
+    ]
   },
   "include": [
     "src",

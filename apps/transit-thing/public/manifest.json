@@ -2,9 +2,67 @@
   "id": "01a06478-f4f4-725a-8bc0-776641f7a436",
   "name": "transit-thing",
   "version": "0.1.0",
-  "description": "",
+  "description": "Next arrivals for your stops, live from Transit Tracker.",
   "settings": "settings.html",
-  "config": [],
-  "permissions": [],
-  "art": { "heroPx": 248, "thumbPx": 96 }
+  "config": [
+    {
+      "type": "string",
+      "data": {
+        "key": "apiBaseUrl",
+        "label": "Transit Tracker API base URL",
+        "pattern": null,
+        "minLength": null,
+        "maxLength": null,
+        "default": "https://tt.horner.tj/"
+      }
+    },
+    {
+      "type": "string",
+      "data": {
+        "key": "feed",
+        "label": "Feed code (for example st for Puget Sound)",
+        "pattern": null,
+        "minLength": null,
+        "maxLength": null,
+        "default": "st"
+      }
+    },
+    {
+      "type": "string",
+      "data": {
+        "key": "slots",
+        "label": "Stops (JSON list of {stopId, stopName, routeIds}; empty uses the ones picked on the device)",
+        "pattern": null,
+        "minLength": null,
+        "maxLength": null,
+        "default": ""
+      }
+    },
+    {
+      "type": "number",
+      "data": {
+        "key": "perStop",
+        "label": "Arrivals shown per stop",
+        "min": 1,
+        "max": 4,
+        "step": 1,
+        "default": 3
+      }
+    },
+    {
+      "type": "boolean",
+      "data": {
+        "key": "ambientIdle",
+        "label": "Show the clock after a minute without input",
+        "default": true
+      }
+    }
+  ],
+  "permissions": [
+    "geo"
+  ],
+  "art": {
+    "heroPx": 248,
+    "thumbPx": 96
+  }
 }

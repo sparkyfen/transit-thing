@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "push": "bun scripts/push.ts",
     "share": "bun scripts/share.ts",
-    "update": "bunx @bridgething/updater"
+    "update": "bunx @bridgething/updater",
+    "test": "bun test"
   },
   "dependencies": {
     "@bridgething/client": "^0.12.1",
@@ -23,6 +24,7 @@
     "@msgpack/msgpack": "^3.1.3",
     "@preact/preset-vite": "^2.10.5",
     "@tailwindcss/vite": "^4.3.3",
+    "@types/bun": "^1.4.0",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.1.1",
