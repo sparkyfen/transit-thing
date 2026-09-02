@@ -1,0 +1,8 @@
+{
+  "author": "Sparky Fen",
+  "homepage": "https://github.com/sparkyfen/transit-thing",
+  "source": "https://github.com/sparkyfen/transit-thing",
+  "icon": null,
+  "screenshots": [],
+  "min_libbridgething_version": "0.12.1"
+}

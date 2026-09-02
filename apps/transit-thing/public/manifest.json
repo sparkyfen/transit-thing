@@ -1,0 +1,10 @@
+{
+  "id": "01a06478-f4f4-725a-8bc0-776641f7a436",
+  "name": "transit-thing",
+  "version": "0.1.0",
+  "description": "",
+  "settings": "settings.html",
+  "config": [],
+  "permissions": [],
+  "art": { "heroPx": 248, "thumbPx": 96 }
+}

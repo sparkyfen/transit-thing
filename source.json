@@ -1,0 +1,8 @@
+{
+  "name": "Transit Thing",
+  "description": "Transit arrivals board for the Car Thing.",
+  "homepage": "https://github.com/sparkyfen/transit-thing",
+  "icon": null,
+  "base_url": "https://sparkyfen.github.io/transit-thing",
+  "recommended_sources": []
+}
