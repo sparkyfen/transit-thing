@@ -34,12 +34,26 @@ const ROUTES = new Map<string, Route[]>([
     ],
   ],
   ['st:40_99903', [{ routeId: 'st:40_2LINE', name: '2 Line', color: '0077C0', headsigns: ['Redmond Technology', 'Lynnwood City Center'] }]],
+  [
+    'st:1_75403',
+    [
+      { routeId: 'st:1_100252', name: '245', color: '00A5D2', headsigns: ['Kirkland'] },
+      { routeId: 'st:1_100511', name: '566', color: '2B376E', headsigns: ['Auburn Station'] },
+    ],
+  ],
+  [
+    'st:95_2',
+    [
+      { routeId: 'st:95_1', name: 'Bainbridge Ferry', color: '006B54', headsigns: ['Bainbridge Island'] },
+      { routeId: 'st:95_3', name: 'Bremerton Ferry', color: '006B54', headsigns: ['Bremerton'] },
+    ],
+  ],
 ]);
+
+const ROUTE_BY_ID = new Map([...ROUTES.values()].flat().map(r => [r.routeId, r]));
 
 interface Seed {
   routeId: string;
-  routeName: string;
-  routeColor: string | null;
   headsign: string;
   offsetsMin: number[];
   realtime: boolean[];
@@ -49,29 +63,29 @@ const SEEDS = new Map<string, Seed[]>([
   [
     'st:1_67652',
     [
-      { routeId: 'st:1_100133', routeName: '240', routeColor: 'FDB71A', headsign: 'Renton Newcastle', offsetsMin: [3, 18, 33], realtime: [true, false, false] },
-      { routeId: 'st:40_100239', routeName: '550', routeColor: '2B376E', headsign: 'Seattle', offsetsMin: [7, 22], realtime: [true, true] },
+      { routeId: 'st:1_100133', headsign: 'Renton Newcastle', offsetsMin: [3, 18, 33], realtime: [true, false, false] },
+      { routeId: 'st:40_100239', headsign: 'Seattle', offsetsMin: [7, 22], realtime: [true, true] },
     ],
   ],
   [
     'st:40_99903',
     [
-      { routeId: 'st:40_2LINE', routeName: '2 Line', routeColor: '0077C0', headsign: 'Redmond Technology', offsetsMin: [2, 12, 22], realtime: [true, true, false] },
-      { routeId: 'st:40_2LINE', routeName: '2 Line', routeColor: '0077C0', headsign: 'Lynnwood City Center', offsetsMin: [5, 15], realtime: [true, false] },
+      { routeId: 'st:40_2LINE', headsign: 'Redmond Technology', offsetsMin: [2, 12, 22], realtime: [true, true, false] },
+      { routeId: 'st:40_2LINE', headsign: 'Lynnwood City Center', offsetsMin: [5, 15], realtime: [true, false] },
     ],
   ],
   [
     'st:1_75403',
     [
-      { routeId: 'st:1_100252', routeName: '245', routeColor: '00A5D2', headsign: 'Kirkland', offsetsMin: [0, 14], realtime: [true, true] },
-      { routeId: 'st:1_100511', routeName: '566', routeColor: '2B376E', headsign: 'Auburn Station', offsetsMin: [9], realtime: [false] },
+      { routeId: 'st:1_100252', headsign: 'Kirkland', offsetsMin: [0, 14], realtime: [true, true] },
+      { routeId: 'st:1_100511', headsign: 'Auburn Station', offsetsMin: [9], realtime: [false] },
     ],
   ],
   [
     'st:95_2',
     [
-      { routeId: 'st:95_1', routeName: 'Bainbridge Ferry', routeColor: '006B54', headsign: 'Bainbridge Island', offsetsMin: [24, 74], realtime: [true, false] },
-      { routeId: 'st:95_3', routeName: 'Bremerton Ferry', routeColor: '006B54', headsign: 'Bremerton', offsetsMin: [41], realtime: [true] },
+      { routeId: 'st:95_1', headsign: 'Bainbridge Island', offsetsMin: [24, 74], realtime: [true, false] },
+      { routeId: 'st:95_3', headsign: 'Bremerton', offsetsMin: [41], realtime: [true] },
     ],
   ],
   ['st:1_29270', []],
@@ -80,20 +94,21 @@ const SEEDS = new Map<string, Seed[]>([
 function tripsFor(slot: Slot, nowMs: number): Trip[] {
   const seeds = SEEDS.get(slot.stopId) ?? [];
   const base = Math.floor(nowMs / 1000);
-  return seeds.flatMap((seed, s) =>
-    seed.offsetsMin.map((offset, i) => ({
+  return seeds.flatMap((seed, s) => {
+    const route = ROUTE_BY_ID.get(seed.routeId)!;
+    return seed.offsetsMin.map((offset, i) => ({
       tripId: `${slot.stopId}:${s}:${i}`,
       stopId: slot.stopId,
       routeId: seed.routeId,
-      routeName: seed.routeName,
-      routeColor: seed.routeColor,
+      routeName: route.name,
+      routeColor: route.color,
       stopName: slot.stopName,
       headsign: seed.headsign,
       arrivalTime: base + offset * 60,
       departureTime: base + offset * 60,
       isRealtime: seed.realtime[i] ?? false,
-    })),
-  );
+    }));
+  });
 }
 
 export const fixtureSource: TransitSource = {

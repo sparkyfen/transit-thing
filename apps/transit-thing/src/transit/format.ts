@@ -2,16 +2,6 @@ export function minutesUntil(arrivalTime: number, nowMs: number): number {
   return Math.max(0, Math.round((arrivalTime * 1000 - nowMs) / 60_000));
 }
 
-export function countdown(arrivalTime: number, nowMs: number): string {
-  const min = minutesUntil(arrivalTime, nowMs);
-  return min === 0 ? 'now' : String(min);
-}
-
-export function countdownLabel(min: string): string {
-  if (min === 'now') return 'Due now';
-  return min === '1' ? 'In 1 minute' : `In ${min} minutes`;
-}
-
 export function clockTime(epochSeconds: number): string {
   return new Date(epochSeconds * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
@@ -30,8 +20,8 @@ export function unitsFor(feed: string): Units {
 
 const FEET_PER_METER = 3.28084;
 const METERS_PER_MILE = 1609.344;
-// feet switch to miles at the same reading size as meters to kilometers
-const MAX_FEET = 1000;
+// feet switch to miles at a tenth of a mile so the scale never reads "990 ft" beside "0.1 mi"
+const MAX_FEET = 528;
 
 export function distanceLabel(meters: number, units: Units): string {
   if (units === 'us') {

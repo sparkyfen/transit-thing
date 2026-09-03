@@ -3,17 +3,19 @@ import type { Route, Slot, Stop } from './transit/types';
 
 export type LoadStatus = 'loading' | 'ready' | 'failed';
 export type LocateStatus = 'idle' | 'locating' | 'failed';
+// one alert shows at a time, the newest failure wins
+export type PickerAlert = 'refresh' | 'locate' | 'routes';
 
 // load and locate fail independently: a bad fix must not hide the retry row, and a failed refresh must not drop the stops
 type PickerScreen = {
   kind: 'picker';
   token: number;
+  latestReq: number;
   stops: Stop[];
   cursor: number;
   load: LoadStatus;
   locate: LocateStatus;
-  refreshFailed: boolean;
-  routesFailed: boolean;
+  alert: PickerAlert | null;
 };
 
 export type Screen =
@@ -41,8 +43,9 @@ export type Action =
   | { type: 'toggleRoute'; routeId: string; at: number }
   | { type: 'saveSlot'; at: number }
   | { type: 'openPicker'; token: number; at: number }
-  | { type: 'stops'; token: number; stops: Stop[] }
-  | { type: 'stopsFailed'; token: number }
+  | { type: 'stopsRequested'; token: number; reqId: number }
+  | { type: 'stops'; token: number; reqId: number; stops: Stop[] }
+  | { type: 'stopsFailed'; token: number; reqId: number }
   | { type: 'openRoutes'; token: number; stop: Stop; routes: Route[] }
   | { type: 'routesFailed'; token: number }
   | { type: 'locating'; token: number }
@@ -62,7 +65,7 @@ function wrap(i: number, n: number): number {
 export const LOCATE_ROW = 0;
 export const RETRY_ROW = 1;
 export const stopRow = (i: number) => i + 1;
-export const stopIndex = (cursor: number) => cursor - 1;
+const stopIndex = (cursor: number) => cursor - 1;
 
 function pickerRows(screen: PickerScreen): number {
   if (screen.load === 'failed') return RETRY_ROW + 1;
@@ -70,7 +73,7 @@ function pickerRows(screen: PickerScreen): number {
 }
 
 function freshPicker(token: number): PickerScreen {
-  return { kind: 'picker', token, stops: [], cursor: 0, load: 'loading', locate: 'idle', refreshFailed: false, routesFailed: false };
+  return { kind: 'picker', token, latestReq: 0, stops: [], cursor: 0, load: 'loading', locate: 'idle', alert: null };
 }
 
 function clampCursor(screen: PickerScreen): PickerScreen {
@@ -79,7 +82,7 @@ function clampCursor(screen: PickerScreen): PickerScreen {
 
 // nothing to announce while a fix is in flight: the stops will follow it
 export function pickerMessage(load: LoadStatus, locate: LocateStatus, stopCount: number, nearYou: boolean): string | null {
-  if (load === 'loading') return 'Loading stops';
+  if (load === 'loading') return 'Loading stops.';
   if (load === 'failed' || locate === 'locating') return null;
   if (stopCount === 0) return 'No stops found.';
   const count = stopCount === 1 ? '1 stop' : `${stopCount} stops`;
@@ -110,30 +113,34 @@ export function reduce(state: State, action: Action): State {
 function step(state: State, action: Action): State {
   const { screen } = state;
   switch (action.type) {
-    case 'stops': {
+    case 'stopsRequested':
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;
+      return { ...state, screen: { ...screen, latestReq: action.reqId } };
+    case 'stops': {
+      if (screen.kind !== 'picker' || screen.token !== action.token || screen.latestReq !== action.reqId) return state;
       const stops = sortByDistance(action.stops, state.origin);
-      return { ...state, screen: clampCursor({ ...screen, stops, load: 'ready', refreshFailed: false, routesFailed: false }) };
+      const alert = screen.locate === 'failed' ? 'locate' : null;
+      return { ...state, screen: clampCursor({ ...screen, stops, load: 'ready', alert }) };
     }
     case 'stopsFailed':
-      if (screen.kind !== 'picker' || screen.token !== action.token) return state;
-      if (screen.stops.length > 0) return { ...state, screen: { ...screen, refreshFailed: true } };
+      if (screen.kind !== 'picker' || screen.token !== action.token || screen.latestReq !== action.reqId) return state;
+      if (screen.stops.length > 0) return { ...state, screen: { ...screen, alert: 'refresh' } };
       return { ...state, screen: clampCursor({ ...screen, load: 'failed' }) };
     case 'routesFailed':
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;
-      return { ...state, screen: { ...screen, routesFailed: true } };
+      return { ...state, screen: { ...screen, alert: 'routes' } };
     case 'openRoutes':
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;
       return { ...state, screen: { kind: 'routes', token: screen.token, stops: screen.stops, stop: action.stop, routes: action.routes, cursor: 0, chosen: [] } };
     case 'locating':
       if (screen.kind !== 'picker' || screen.token !== action.token || screen.locate === 'locating') return state;
-      return { ...state, screen: { ...screen, locate: 'locating' } };
+      return { ...state, screen: { ...screen, locate: 'locating', alert: screen.alert === 'locate' ? null : screen.alert } };
     case 'locateFailed':
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;
-      return { ...state, screen: { ...screen, locate: 'failed' } };
+      return { ...state, screen: { ...screen, locate: 'failed', alert: 'locate' } };
     case 'origin':
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;
-      return { ...state, origin: action.origin, screen: { ...screen, locate: 'idle' } };
+      return { ...state, origin: action.origin, screen: { ...screen, locate: 'idle', stops: sortByDistance(screen.stops, action.origin) } };
   }
   const touched = { ...state, lastInputAt: action.at };
   switch (action.type) {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LOCATE_ROW, pickerMessage, RETRY_ROW, stopRow, type LoadStatus, type LocateStatus } from '../state';
+import { LOCATE_ROW, pickerMessage, RETRY_ROW, stopRow, type LoadStatus, type LocateStatus, type PickerAlert } from '../state';
 import { distanceLabel, rowTitle, type Units } from '../transit/format';
 import { haversine, type Origin } from '../transit/geo';
 import type { Route, Stop } from '../transit/types';
@@ -19,19 +19,30 @@ function useCursorFocus(cursor: number) {
       : { ref: null, tabIndex: -1, 'aria-current': undefined };
 }
 
+// the save button reads as a row: accent when the cursor sits on it, muted until a route is chosen
+const SAVE_CLASS = {
+  ready: { cursor: 'border-accent bg-accent text-screen', idle: 'border-soft text-near' },
+  disabled: { cursor: 'border-accent bg-accent-soft text-soft', idle: 'border-soft text-soft' },
+};
+
 function rowClass(active: boolean): string {
   return `flex w-full items-center gap-4 border-b border-l-[3px] border-rule px-3 py-3 text-left outline-none ${
     active ? 'border-l-accent bg-accent-soft text-off-white' : 'border-l-transparent text-near'
   }`;
 }
 
+const ALERTS: Record<PickerAlert, string> = {
+  refresh: "Couldn't refresh stops. Showing the stops found earlier.",
+  locate: "Couldn't get this device's location.",
+  routes: "Couldn't load routes for that stop. Try again.",
+};
+
 interface StopsProps {
   stops: Stop[];
   cursor: number;
   load: LoadStatus;
   locate: LocateStatus;
-  refreshFailed: boolean;
-  routesFailed: boolean;
+  alert: PickerAlert | null;
   origin: Origin | null;
   units: Units;
   onLocate: () => void;
@@ -39,14 +50,9 @@ interface StopsProps {
   onPick: (stop: Stop, row: number) => void;
 }
 
-export function StopPicker({ stops, cursor, load, locate, refreshFailed, routesFailed, origin, units, onLocate, onRetry, onPick }: StopsProps) {
+export function StopPicker({ stops, cursor, load, locate, alert, origin, units, onLocate, onRetry, onPick }: StopsProps) {
   const rowProps = useCursorFocus(cursor);
   const message = pickerMessage(load, locate, stops.length, origin !== null);
-  const alerts = [
-    refreshFailed ? "Couldn't refresh stops." : null,
-    locate === 'failed' ? "Couldn't get this device's location." : null,
-    routesFailed ? "Couldn't load routes for that stop. Try again." : null,
-  ].filter((a): a is string => a !== null);
   // the stop count is for screen readers only; sighted users see the list itself
   const visible = stops.length === 0 ? message : null;
   // a live region only announces text that arrives after it mounts, so it starts empty
@@ -97,11 +103,9 @@ export function StopPicker({ stops, cursor, load, locate, refreshFailed, routesF
       <div role="status" className="sr-only">
         {announced}
       </div>
-      {alerts.map(alert => (
-        <p key={alert} className="m-0 px-8 py-2 font-mono text-hint text-warn" role="alert">
-          {alert}
-        </p>
-      ))}
+      <p className="m-0 h-[2.125rem] px-8 py-2 font-mono text-hint leading-[1.125rem] text-warn" role="alert">
+        {alert ? ALERTS[alert] : ''}
+      </p>
       <footer className="flex justify-between gap-6 border-t border-rule px-8 pt-3 pb-4 font-mono text-hint text-soft">
         <span>Turn the dial to move, press it to choose</span>
         <span>Back returns to the board</span>
@@ -167,9 +171,7 @@ export function RoutePicker({ stop, routes, cursor, chosen, onToggle, onSave }: 
               {...rowProps(saveRow)}
               aria-disabled={!canSave}
               aria-describedby="save-hint"
-              className={`border px-4 py-2 font-mono text-row-lg outline-none ${cursor === saveRow ? 'border-accent' : 'border-soft'} ${
-                !canSave ? (cursor === saveRow ? 'bg-accent-soft text-soft' : 'text-soft') : cursor === saveRow ? 'bg-accent text-screen' : 'text-near'
-              }`}
+              className={`border px-4 py-2 font-mono text-row-lg outline-none ${SAVE_CLASS[canSave ? 'ready' : 'disabled'][cursor === saveRow ? 'cursor' : 'idle']}`}
               onClick={onSave}>
               {saveLabel}
             </button>

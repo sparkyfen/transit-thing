@@ -11,8 +11,8 @@ const routes: Route[] = [
   { routeId: 'b', name: 'B', color: null, headsigns: [] },
 ];
 
-const picker = (s: State = base): State =>
-  reduce(reduce(s, { type: 'openPicker', token: 1, at: 0 }), { type: 'stops', token: 1, stops: [stop, stop2] });
+const opened = (s: State = base): State => reduce(reduce(s, { type: 'openPicker', token: 1, at: 0 }), { type: 'stopsRequested', token: 1, reqId: 1 });
+const picker = (s: State = base): State => reduce(opened(s), { type: 'stops', token: 1, reqId: 1, stops: [stop, stop2] });
 const routesScreen = (s: State = base): State => reduce(picker(s), { type: 'openRoutes', token: 1, stop, routes });
 
 describe('dial on the board', () => {
@@ -61,19 +61,18 @@ describe('ambient', () => {
 
 describe('loading stops', () => {
   test('the picker opens empty and fills when its request lands', () => {
-    const open = reduce(base, { type: 'openPicker', token: 1, at: 0 });
-    expect(open.screen).toMatchObject({ kind: 'picker', load: 'loading', locate: 'idle', stops: [], cursor: 0 });
+    const open = opened();
+    expect(open.screen).toMatchObject({ kind: 'picker', load: 'loading', locate: 'idle', alert: null, latestReq: 1, stops: [], cursor: 0 });
     expect(picker().screen).toMatchObject({ load: 'ready', stops: [stop, stop2] });
   });
   test('a reply for a request the user already left is dropped', () => {
-    const open = reduce(base, { type: 'openPicker', token: 1, at: 0 });
-    const gone = reduce(open, { type: 'back', at: 1 });
-    expect(reduce(gone, { type: 'stops', token: 1, stops: [stop] }).screen.kind).toBe('board');
+    const gone = reduce(opened(), { type: 'back', at: 1 });
+    expect(reduce(gone, { type: 'stops', token: 1, reqId: 1, stops: [stop] }).screen.kind).toBe('board');
     const reopened = reduce(gone, { type: 'openPicker', token: 2, at: 2 });
-    expect(reduce(reopened, { type: 'stops', token: 1, stops: [stop] }).screen).toMatchObject({ load: 'loading', stops: [] });
+    expect(reduce(reopened, { type: 'stops', token: 1, reqId: 1, stops: [stop] }).screen).toMatchObject({ load: 'loading', stops: [] });
   });
   test('a failed load shows a retry row the dial can reach', () => {
-    const failed = reduce(reduce(base, { type: 'openPicker', token: 1, at: 0 }), { type: 'stopsFailed', token: 1 });
+    const failed = reduce(opened(), { type: 'stopsFailed', token: 1, reqId: 1 });
     expect(failed.screen).toMatchObject({ load: 'failed', stops: [] });
     const onRetry = reduce(failed, { type: 'turn', delta: 1, at: 1 });
     expect(selectOn(onRetry.screen)).toEqual({ kind: 'retry' });
@@ -81,49 +80,62 @@ describe('loading stops', () => {
   });
   test('a failed route load keeps the stops and flags it until the next list', () => {
     const s = reduce(picker(), { type: 'routesFailed', token: 1 });
-    expect(s.screen).toMatchObject({ load: 'ready', routesFailed: true, stops: [stop, stop2] });
+    expect(s.screen).toMatchObject({ load: 'ready', alert: 'routes', stops: [stop, stop2] });
     expect(pickerMessage('ready', 'idle', 2, false)).toBe('2 stops found.');
-    expect(reduce(s, { type: 'stops', token: 1, stops: [stop] }).screen).toMatchObject({ routesFailed: false });
+    expect(reduce(s, { type: 'stops', token: 1, reqId: 1, stops: [stop] }).screen).toMatchObject({ alert: null });
   });
   test('a reply that lands after a failed fix keeps the location error', () => {
     const failed = reduce(reduce(picker(), { type: 'locating', token: 1 }), { type: 'locateFailed', token: 1 });
-    expect(reduce(failed, { type: 'stops', token: 1, stops: [stop] }).screen).toMatchObject({ load: 'ready', locate: 'failed', stops: [stop] });
-    const retried = reduce(reduce(reduce(base, { type: 'openPicker', token: 1, at: 0 }), { type: 'stopsFailed', token: 1 }), { type: 'stops', token: 1, stops: [stop] });
+    expect(reduce(failed, { type: 'stops', token: 1, reqId: 1, stops: [stop] }).screen).toMatchObject({ load: 'ready', locate: 'failed', stops: [stop] });
+    const retried = reduce(reduce(opened(), { type: 'stopsFailed', token: 1, reqId: 1 }), { type: 'stops', token: 1, reqId: 1, stops: [stop] });
     expect(retried.screen).toMatchObject({ load: 'ready', stops: [stop] });
   });
   test('a failed refresh after a failed fix keeps the stops and adds an alert', () => {
     const six = [1, 2, 3, 4, 5, 6].map(n => ({ ...stop, stopId: `s${n}` }));
-    let s = reduce(picker(), { type: 'stops', token: 1, stops: six });
+    let s = reduce(picker(), { type: 'stops', token: 1, reqId: 1, stops: six });
     s = reduce(reduce(s, { type: 'locating', token: 1 }), { type: 'locateFailed', token: 1 });
-    s = reduce(s, { type: 'stopsFailed', token: 1 });
-    expect(s.screen).toMatchObject({ load: 'ready', locate: 'failed', refreshFailed: true });
+    s = reduce(s, { type: 'stopsFailed', token: 1, reqId: 1 });
+    expect(s.screen).toMatchObject({ load: 'ready', locate: 'failed', alert: 'refresh' });
     expect(s.screen.kind === 'picker' && s.screen.stops).toHaveLength(6);
     expect(selectOn(reduce(s, { type: 'cursor', cursor: 3, at: 1 }).screen)).toEqual({ kind: 'pickStop', stop: six[2]! });
-    expect(reduce(s, { type: 'stops', token: 1, stops: six }).screen).toMatchObject({ refreshFailed: false, locate: 'failed' });
+    expect(reduce(s, { type: 'stops', token: 1, reqId: 1, stops: six }).screen).toMatchObject({ alert: 'locate', locate: 'failed' });
   });
   test('a failed fix after a failed load keeps the retry row', () => {
-    const failed = reduce(reduce(base, { type: 'openPicker', token: 1, at: 0 }), { type: 'stopsFailed', token: 1 });
+    const failed = reduce(opened(), { type: 'stopsFailed', token: 1, reqId: 1 });
     const s = reduce(reduce(failed, { type: 'locating', token: 1 }), { type: 'locateFailed', token: 1 });
     expect(s.screen).toMatchObject({ load: 'failed', locate: 'failed', stops: [] });
     expect(pickerMessage('failed', 'failed', 0, false)).toBeNull();
     expect(selectOn(reduce(s, { type: 'turn', delta: 1, at: 1 }).screen)).toEqual({ kind: 'retry' });
   });
   test('failures for another request or screen are dropped', () => {
-    expect(reduce(picker(), { type: 'stopsFailed', token: 2 }).screen).toMatchObject({ load: 'ready', refreshFailed: false, stops: [stop, stop2] });
-    expect(reduce(picker(), { type: 'routesFailed', token: 2 }).screen).toMatchObject({ routesFailed: false });
-    expect(reduce(base, { type: 'stopsFailed', token: 1 }).screen.kind).toBe('board');
+    expect(reduce(picker(), { type: 'stopsFailed', token: 2, reqId: 1 }).screen).toMatchObject({ load: 'ready', alert: null, stops: [stop, stop2] });
+    expect(reduce(picker(), { type: 'routesFailed', token: 2 }).screen).toMatchObject({ alert: null });
+    expect(reduce(base, { type: 'stopsFailed', token: 1, reqId: 1 }).screen.kind).toBe('board');
     expect(reduce(base, { type: 'routesFailed', token: 1 }).screen.kind).toBe('board');
   });
   test('a shorter list or a failure pulls a deep cursor back into range', () => {
     let s = picker();
     s = reduce(reduce(s, { type: 'turn', delta: 1, at: 1 }), { type: 'turn', delta: 1, at: 2 });
     expect(s.screen).toMatchObject({ cursor: 2 });
-    expect(reduce(s, { type: 'stops', token: 1, stops: [stop] }).screen).toMatchObject({ cursor: 1 });
-    expect(reduce(s, { type: 'stops', token: 1, stops: [] }).screen).toMatchObject({ cursor: 0 });
-    expect(reduce(reduce(s, { type: 'stops', token: 1, stops: [] }), { type: 'stopsFailed', token: 1 }).screen).toMatchObject({ cursor: 0 });
+    expect(reduce(s, { type: 'stops', token: 1, reqId: 1, stops: [stop] }).screen).toMatchObject({ cursor: 1 });
+    expect(reduce(s, { type: 'stops', token: 1, reqId: 1, stops: [] }).screen).toMatchObject({ cursor: 0 });
+    expect(reduce(reduce(s, { type: 'stops', token: 1, reqId: 1, stops: [] }), { type: 'stopsFailed', token: 1, reqId: 1 }).screen).toMatchObject({ cursor: 0 });
+  });
+  test('a reply for an older request that lands after a newer one is ignored', () => {
+    let s = reduce(opened(), { type: 'stopsRequested', token: 1, reqId: 2 });
+    expect(reduce(s, { type: 'stops', token: 1, reqId: 1, stops: [stop] }).screen).toMatchObject({ load: 'loading', stops: [] });
+    expect(reduce(s, { type: 'stopsFailed', token: 1, reqId: 1 }).screen).toMatchObject({ load: 'loading' });
+    s = reduce(s, { type: 'stops', token: 1, reqId: 2, stops: [stop, stop2] });
+    expect(s.screen).toMatchObject({ load: 'ready', stops: [stop, stop2] });
+    expect(reduce(s, { type: 'stops', token: 1, reqId: 1, stops: [stop] }).screen).toMatchObject({ stops: [stop, stop2] });
+    expect(reduce(s, { type: 'stopsFailed', token: 1, reqId: 1 }).screen).toMatchObject({ alert: null });
+  });
+  test('a request for another picker does not become the latest', () => {
+    expect(reduce(picker(), { type: 'stopsRequested', token: 2, reqId: 5 }).screen).toMatchObject({ latestReq: 1 });
+    expect(reduce(base, { type: 'stopsRequested', token: 1, reqId: 5 }).screen.kind).toBe('board');
   });
   test('locating from the retry row leaves the cursor on it', () => {
-    const failed = reduce(reduce(base, { type: 'openPicker', token: 1, at: 0 }), { type: 'stopsFailed', token: 1 });
+    const failed = reduce(opened(), { type: 'stopsFailed', token: 1, reqId: 1 });
     const onRetry = reduce(failed, { type: 'turn', delta: 1, at: 1 });
     expect(reduce(onRetry, { type: 'locating', token: 1 }).screen).toMatchObject({ load: 'failed', locate: 'locating', cursor: 1 });
   });
@@ -147,14 +159,19 @@ describe('locating', () => {
     expect(selectOn(s.screen)).toEqual({ kind: 'locate' });
   });
   test('a good fix clears the alert and sorts the stops by distance', () => {
-    let s = reduce(picker(), { type: 'stops', token: 1, stops: [far, near, mid] });
+    let s = reduce(picker(), { type: 'stops', token: 1, reqId: 1, stops: [far, near, mid] });
     s = reduce(reduce(s, { type: 'locating', token: 1 }), { type: 'origin', token: 1, origin: { lat: 47.615, lon: -122.195 } });
     expect(s.screen).toMatchObject({ locate: 'idle' });
-    s = reduce(s, { type: 'stops', token: 1, stops: [far, near, mid] });
+    s = reduce(s, { type: 'stops', token: 1, reqId: 1, stops: [far, near, mid] });
+    expect(s.screen.kind === 'picker' && s.screen.stops.map(x => x.stopId)).toEqual(['near', 'mid', 'far']);
+  });
+  test('a fix sorts the stops already on screen before the next reply', () => {
+    let s = reduce(picker(), { type: 'stops', token: 1, reqId: 1, stops: [far, near, mid] });
+    s = reduce(reduce(s, { type: 'locating', token: 1 }), { type: 'origin', token: 1, origin: { lat: 47.615, lon: -122.195 } });
     expect(s.screen.kind === 'picker' && s.screen.stops.map(x => x.stopId)).toEqual(['near', 'mid', 'far']);
   });
   test('stops keep the server order without an origin', () => {
-    const s = reduce(picker(), { type: 'stops', token: 1, stops: [far, near, mid] });
+    const s = reduce(picker(), { type: 'stops', token: 1, reqId: 1, stops: [far, near, mid] });
     expect(s.screen.kind === 'picker' && s.screen.stops.map(x => x.stopId)).toEqual(['far', 'near', 'mid']);
   });
   test('a fix or a failure for another request is dropped', () => {
@@ -165,9 +182,25 @@ describe('locating', () => {
   });
 });
 
+describe('alerts', () => {
+  test('the newest failure is the one shown', () => {
+    let s = reduce(reduce(picker(), { type: 'locating', token: 1 }), { type: 'locateFailed', token: 1 });
+    expect(s.screen).toMatchObject({ alert: 'locate' });
+    s = reduce(s, { type: 'stopsFailed', token: 1, reqId: 1 });
+    expect(s.screen).toMatchObject({ alert: 'refresh', locate: 'failed' });
+    s = reduce(s, { type: 'routesFailed', token: 1 });
+    expect(s.screen).toMatchObject({ alert: 'routes', locate: 'failed' });
+    s = reduce(s, { type: 'locating', token: 1 });
+    expect(s.screen).toMatchObject({ alert: 'routes', locate: 'locating' });
+    s = reduce(s, { type: 'locateFailed', token: 1 });
+    expect(s.screen).toMatchObject({ alert: 'locate' });
+    expect(reduce(s, { type: 'locating', token: 1 }).screen).toMatchObject({ alert: null, locate: 'locating' });
+  });
+});
+
 describe('pickerMessage', () => {
   test('says what the list is doing when it is empty', () => {
-    expect(pickerMessage('loading', 'idle', 0, false)).toBe('Loading stops');
+    expect(pickerMessage('loading', 'idle', 0, false)).toBe('Loading stops.');
     expect(pickerMessage('ready', 'idle', 0, false)).toBe('No stops found.');
     expect(pickerMessage('ready', 'failed', 0, false)).toBe('No stops found.');
   });

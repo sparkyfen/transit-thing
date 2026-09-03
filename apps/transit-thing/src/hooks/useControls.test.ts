@@ -33,10 +33,6 @@ describe('wheelPixels', () => {
     expect(wheelPixels(2, 1)).toBe(240);
     expect(wheelPixels(-1, 1)).toBe(-120);
   });
-  test('a page is one detent either way', () => {
-    expect(wheelPixels(3, 2)).toBe(120);
-    expect(wheelPixels(-3, 2)).toBe(-120);
-  });
 });
 
 describe('keyToAction', () => {

@@ -29,6 +29,7 @@ export default function App() {
   const latest = useRef(state);
   latest.current = state;
   const tokens = useRef(0);
+  const reqs = useRef(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [feeds, setFeeds] = useState<Map<string, Feed>>(() => new Map());
   const [connection, setConnection] = useState(client.connectionState);
@@ -77,11 +78,13 @@ export default function App() {
   }, [state.slots]);
 
   const loadStops = useCallback(async (token: number, origin: Origin | null) => {
+    const reqId = ++reqs.current;
+    dispatch({ type: 'stopsRequested', token, reqId });
     try {
       const stops = await fixtureSource.stopsNear(origin);
-      dispatch({ type: 'stops', token, stops });
+      dispatch({ type: 'stops', token, reqId, stops });
     } catch {
-      dispatch({ type: 'stopsFailed', token });
+      dispatch({ type: 'stopsFailed', token, reqId });
     }
   }, []);
 
@@ -154,8 +157,7 @@ export default function App() {
         cursor={screen.cursor}
         load={screen.load}
         locate={screen.locate}
-        refreshFailed={screen.refreshFailed}
-        routesFailed={screen.routesFailed}
+        alert={screen.alert}
         origin={state.origin}
         units={unitsFor(config.feed)}
         onLocate={() => tap(LOCATE_ROW, { kind: 'locate' })}

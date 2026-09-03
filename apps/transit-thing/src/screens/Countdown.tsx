@@ -1,9 +1,16 @@
-import { countdownLabel } from '../transit/format';
-
 interface Props {
-  min: string;
+  min: number;
   size: 'board' | 'ambient';
   dim?: boolean;
+}
+
+export function countdown(min: number): string {
+  return min === 0 ? 'now' : String(min);
+}
+
+export function countdownLabel(min: number): string {
+  if (min === 0) return 'Due now';
+  return min === 1 ? 'In 1 minute' : `In ${min} minutes`;
 }
 
 // the min slot stays in the flow when empty so "now" ends where the numerals end
@@ -16,10 +23,10 @@ export function Countdown({ min, size, dim = false }: Props) {
           dim ? 'text-soft' : ''
         }`}
         aria-hidden="true">
-        {min}
+        {countdown(min)}
       </span>
       <span className="w-[3ch] font-mono text-hint text-soft" aria-hidden="true">
-        {min === 'now' ? '' : 'min'}
+        {min === 0 ? '' : 'min'}
       </span>
     </span>
   );

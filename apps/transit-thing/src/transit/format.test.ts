@@ -5,8 +5,6 @@ import {
   badgeLabel,
   clockTime,
   contrastRatio,
-  countdown,
-  countdownLabel,
   distanceLabel,
   minutesUntil,
   routeHex,
@@ -17,25 +15,17 @@ import {
 const now = Date.UTC(2026, 8, 2, 20, 0, 0);
 const at = (min: number) => Math.floor(now / 1000) + min * 60;
 
-describe('countdown', () => {
-  test('says now under half a minute', () => {
-    expect(countdown(at(0), now)).toBe('now');
-    expect(countdown(at(0) + 20, now)).toBe('now');
+describe('minutesUntil', () => {
+  test('is zero under half a minute', () => {
+    expect(minutesUntil(at(0), now)).toBe(0);
+    expect(minutesUntil(at(0) + 20, now)).toBe(0);
   });
   test('rounds to whole minutes', () => {
-    expect(countdown(at(3), now)).toBe('3');
-    expect(countdown(at(3) + 40, now)).toBe('4');
+    expect(minutesUntil(at(3), now)).toBe(3);
+    expect(minutesUntil(at(3) + 40, now)).toBe(4);
   });
   test('never goes negative for a trip already gone', () => {
     expect(minutesUntil(at(-5), now)).toBe(0);
-  });
-});
-
-describe('countdownLabel', () => {
-  test('reads as a sentence for screen readers', () => {
-    expect(countdownLabel('now')).toBe('Due now');
-    expect(countdownLabel('1')).toBe('In 1 minute');
-    expect(countdownLabel('2')).toBe('In 2 minutes');
   });
 });
 
@@ -57,10 +47,12 @@ describe('distanceLabel', () => {
   });
   test('rounds short US distances to ten feet', () => {
     expect(distanceLabel(26, 'us')).toBe('90 ft');
-    expect(distanceLabel(300, 'us')).toBe('980 ft');
+    expect(distanceLabel(150, 'us')).toBe('490 ft');
+    expect(distanceLabel(160, 'us')).toBe('520 ft');
   });
-  test('switches to miles once the rounded value reaches 1000 feet', () => {
-    expect(distanceLabel(305, 'us')).toBe('0.2 mi');
+  test('switches to miles once the rounded value reaches a tenth of a mile', () => {
+    expect(distanceLabel(161, 'us')).toBe('0.1 mi');
+    expect(distanceLabel(300, 'us')).toBe('0.2 mi');
     expect(distanceLabel(1609, 'us')).toBe('1.0 mi');
     expect(distanceLabel(1931, 'us')).toBe('1.2 mi');
   });

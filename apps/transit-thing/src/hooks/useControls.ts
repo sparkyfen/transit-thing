@@ -12,7 +12,6 @@ export function stepsFor(residue: number, deltaX: number): { steps: number; resi
 
 export function wheelPixels(deltaX: number, deltaMode: number): number {
   if (deltaMode === 1) return deltaX * DETENT;
-  if (deltaMode === 2) return Math.sign(deltaX) * DETENT;
   return deltaX;
 }
 

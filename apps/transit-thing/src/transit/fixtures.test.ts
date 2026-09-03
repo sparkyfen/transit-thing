@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { fixtureSource } from './fixtures';
+import { FIXTURE_SLOTS, fixtureSource } from './fixtures';
 import { forSlot } from './trips';
 import type { Trip } from './types';
 
@@ -14,6 +14,21 @@ describe('fixtureSource', () => {
     const mine = forSlot(slot, got);
     expect(mine).toHaveLength(2);
     expect(mine.every(t => t.routeId === 'st:40_100239' && t.routeName === '550')).toBe(true);
+  });
+  test('every trip carries the name and color of its route', async () => {
+    for (const slot of FIXTURE_SLOTS) {
+      const routes = await fixtureSource.routesAt(slot.stopId);
+      let got: Trip[] = [];
+      fixtureSource.subscribe(slot, trips => {
+        got = trips;
+      });
+      for (const trip of got) {
+        const route = routes.find(r => r.routeId === trip.routeId);
+        expect(route).toBeDefined();
+        expect(trip.routeName).toBe(route!.name);
+        expect(trip.routeColor).toBe(route!.color);
+      }
+    }
   });
   test('at least one nearby stop has no routes, so the empty routes screen stays reachable', async () => {
     const stops = await fixtureSource.stopsNear(null);

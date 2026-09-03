@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { clockTime, countdown, rowTitle } from '../transit/format';
+import { useScreenFocus } from '../hooks/useScreenFocus';
+import { clockTime, minutesUntil, rowTitle } from '../transit/format';
 import { boardStatus, type Connection } from '../transit/status';
 import type { Slot, Trip } from '../transit/types';
 import { Countdown } from './Countdown';
@@ -19,11 +19,7 @@ interface Props {
 }
 
 export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, nowMs, connection, updatedMs, onAddStop }: Props) {
-  // focus lands on the screen root when the board comes back, never on body
-  const root = useRef<HTMLElement>(null);
-  useEffect(() => {
-    root.current?.focus({ preventScroll: true });
-  }, []);
+  const root = useScreenFocus();
   if (!slot) {
     return (
       <main ref={root} tabIndex={-1} className="flex h-full w-full flex-col items-center justify-center gap-6 bg-bg px-16 text-center text-off-white outline-none">
@@ -64,7 +60,7 @@ export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, now
           <li className="row-span-full self-center text-center text-title text-soft">No arrivals scheduled.</li>
         ) : (
           trips.map(trip => {
-            const min = countdown(trip.arrivalTime, nowMs);
+            const min = minutesUntil(trip.arrivalTime, nowMs);
             return (
               <li key={trip.tripId} className="grid grid-cols-[auto_1fr_auto] items-center gap-5 border-b border-rule last:border-b-0">
                 <RouteBadge name={trip.routeName} color={trip.routeColor} size="lg" />
