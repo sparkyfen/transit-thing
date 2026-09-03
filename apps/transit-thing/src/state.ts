@@ -51,7 +51,8 @@ export type Action =
   | { type: 'routesFailed'; token: number; reqId: number }
   | { type: 'locating'; token: number }
   | { type: 'locateFailed'; token: number }
-  | { type: 'origin'; token: number; origin: Origin };
+  | { type: 'origin'; token: number; origin: Origin }
+  | { type: 'slots'; slots: Slot[] };
 
 // what a dial press means on the screens whose select needs a side effect
 export type SelectTarget = { kind: 'openPicker' } | { kind: 'locate' } | { kind: 'retry' } | { kind: 'pickStop'; stop: Stop };
@@ -92,7 +93,7 @@ function clampCursor<S extends PickerScreen | RoutesScreen>(screen: S): S {
 export function pickerMessage(load: LoadStatus, stopCount: number, nearYou: boolean): string | null {
   if (load === 'loading') return 'Loading stops.';
   if (load === 'failed') return null;
-  if (stopCount === 0) return 'No stops found.';
+  if (stopCount === 0) return nearYou ? 'No stops found.' : 'Use my location to find stops.';
   if (stopCount === 1) return '1 stop found.';
   return nearYou ? `${stopCount} stops found, closest first.` : `${stopCount} stops found.`;
 }
@@ -160,6 +161,10 @@ function step(state: State, action: Action): State {
     case 'locateFailed':
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;
       return { ...state, screen: { ...screen, locate: 'failed', alert: 'locate' } };
+    case 'slots': {
+      const index = Math.min(state.index, Math.max(0, action.slots.length - 1));
+      return { ...state, slots: action.slots, index };
+    }
     case 'origin':
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;
       return { ...state, origin: action.origin, screen: { ...screen, locate: 'idle', stops: sortByDistance(screen.stops, action.origin) } };

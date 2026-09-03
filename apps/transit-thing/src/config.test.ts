@@ -24,12 +24,30 @@ describe('applyConfig', () => {
     expect(applyConfig(DEFAULT_CONFIG, 'feed', '')).toBe(DEFAULT_CONFIG);
   });
   test('a deleted key falls back to its default', () => {
-    const set = { feed: 'wmata', perStop: 1, ambientIdle: false };
+    const set = { ...DEFAULT_CONFIG, feed: 'wmata', perStop: 1, ambientIdle: false };
     expect(applyConfig(set, 'feed', null).feed).toBe('st');
     expect(applyConfig(set, 'perStop', null).perStop).toBe(3);
     expect(applyConfig(set, 'ambientIdle', null).ambientIdle).toBe(true);
   });
-  test('other keys are left for the network client', () => {
-    expect(applyConfig(DEFAULT_CONFIG, 'apiBaseUrl', 'https://example.com/')).toBe(DEFAULT_CONFIG);
+  test('unknown keys are ignored', () => {
+    expect(applyConfig(DEFAULT_CONFIG, 'theme', 'dark')).toBe(DEFAULT_CONFIG);
+  });
+});
+
+describe('apiBaseUrl and slots', () => {
+  test('accepts an https origin and nothing else', () => {
+    expect(applyConfig(DEFAULT_CONFIG, 'apiBaseUrl', 'https://tt.example.org').apiBaseUrl).toBe('https://tt.example.org/');
+    for (const bad of ['http://tt.example.org', 'https://u:p@tt.example.org/', 'https://tt.example.org/api', 'https://tt.example.org/?x=1', 'nonsense']) {
+      expect(applyConfig(DEFAULT_CONFIG, 'apiBaseUrl', bad)).toBe(DEFAULT_CONFIG);
+    }
+    expect(applyConfig({ ...DEFAULT_CONFIG, apiBaseUrl: 'https://x.y/' }, 'apiBaseUrl', null).apiBaseUrl).toBe(DEFAULT_CONFIG.apiBaseUrl);
+  });
+  test('parses a slots list and drops the whole value on any bad entry', () => {
+    const good = JSON.stringify([{ stopId: 'st:1_67652', stopName: 'Bay 9', routeIds: ['st:1_100133'] }]);
+    expect(applyConfig(DEFAULT_CONFIG, 'slots', good).slots).toEqual([{ stopId: 'st:1_67652', stopName: 'Bay 9', routeIds: ['st:1_100133'] }]);
+    for (const bad of ['[', '{}', JSON.stringify([{ stopId: 'a b', stopName: 'x', routeIds: ['r'] }]), JSON.stringify([{ stopId: 'a', stopName: 'x', routeIds: [] }]), JSON.stringify([{ stopId: 'a', stopName: 'x', routeIds: ['r'] }, 7])]) {
+      expect(applyConfig(DEFAULT_CONFIG, 'slots', bad)).toBe(DEFAULT_CONFIG);
+    }
+    expect(applyConfig({ ...DEFAULT_CONFIG, slots: [] }, 'slots', '').slots).toBeNull();
   });
 });

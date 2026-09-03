@@ -1,28 +1,50 @@
 import { BridgethingClient } from '@bridgething/client';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { applyConfig, DEFAULT_CONFIG, type Config } from './config';
+import { applyConfig, DEFAULT_CONFIG, parseSlots, type Config } from './config';
 import { daemonUrl } from './daemon';
 import { useControls } from './hooks/useControls';
 import { Ambient } from './screens/Ambient';
 import { Board } from './screens/Board';
 import { RoutePicker, StopPicker } from './screens/Picker';
 import { LOCATE_ROW, reduce, RETRY_ROW, selectOn, type Action, type SelectTarget, type State } from './state';
+import { rememberFirstSeen } from './transit/delay';
 import { FIXTURE_SLOTS, fixtureSource } from './transit/fixtures';
+import { liveSource, type FeedStatus } from './transit/live';
 import { unitsFor } from './transit/format';
 import { locate, type Origin } from './transit/geo';
 import { requestRoutes, requestStops } from './transit/requests';
 import { dataAsOf } from './transit/status';
+import { browserTransport, daemonTransport } from './transit/transport';
 import { everySlotHasFeed, forSlot, nextAcrossSlots, slotKey, soonestUpcoming } from './transit/trips';
-import type { Slot, Trip } from './transit/types';
+import type { Slot, TransitSource, Trip } from './transit/types';
 
 const SOON_MS = 20 * 60_000;
 
 interface Feed {
   trips: Trip[];
   updatedMs: number;
+  firstSeen: Map<string, number>;
 }
 
-const initial: State = { slots: FIXTURE_SLOTS, index: 0, screen: { kind: 'board' }, origin: null, lastInputAt: Date.now() };
+// dev flags: ?fixtures runs on canned data, ?direct talks to the api from the browser instead of through the phone
+const flags = new URLSearchParams(typeof location === 'undefined' ? '' : location.search);
+const USE_FIXTURES = import.meta.env.DEV && flags.has('fixtures');
+const DIRECT = import.meta.env.DEV && flags.has('direct');
+// ?slots=<json> seeds the board and ?at=lat,lon stands in for the phone's fix, both dev only
+const SEED_SLOTS = import.meta.env.DEV ? parseSlots(flags.get('slots') ?? '') : null;
+const FAKE_FIX = ((): Origin | null => {
+  if (!import.meta.env.DEV || !flags.has('at')) return null;
+  const [lat, lon] = (flags.get('at') ?? '').split(',').map(Number);
+  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat: lat!, lon: lon! } : null;
+})();
+
+const initial: State = {
+  slots: SEED_SLOTS ?? (USE_FIXTURES ? FIXTURE_SLOTS : []),
+  index: 0,
+  screen: { kind: 'board' },
+  origin: null,
+  lastInputAt: Date.now(),
+};
 
 export default function App() {
   const client = useMemo(() => new BridgethingClient({ url: daemonUrl() }), []);
@@ -36,6 +58,20 @@ export default function App() {
   const [connection, setConnection] = useState(client.connectionState);
   const [everOpen, setEverOpen] = useState(false);
   const [config, setConfig] = useState<Config>(DEFAULT_CONFIG);
+  const configRef = useRef(config);
+  configRef.current = config;
+  const [links, setLinks] = useState<Map<string, FeedStatus>>(() => new Map());
+
+  const source = useMemo<TransitSource>(() => {
+    if (USE_FIXTURES) return fixtureSource;
+    const live = liveSource(DIRECT ? browserTransport() : daemonTransport(client), () => ({
+      baseUrl: configRef.current.apiBaseUrl,
+      feed: configRef.current.feed,
+      perStop: configRef.current.perStop,
+    }));
+    live.onStatus((slot, status) => setLinks(prev => new Map(prev).set(slotKey(slot), status)));
+    return live;
+  }, [client]);
 
   useEffect(() => {
     const tick = setInterval(() => {
@@ -69,18 +105,23 @@ export default function App() {
   useEffect(() => client.config.onChanged(c => setConfig(prev => applyConfig(prev, c.key, c.value))), [client]);
 
   useEffect(() => {
+    if (config.slots) dispatch({ type: 'slots', slots: config.slots });
+  }, [config.slots]);
+
+  useEffect(() => {
     const offs = state.slots.map(slot =>
-      fixtureSource.subscribe(slot, trips => {
+      source.subscribe(slot, trips => {
         const key = slotKey(slot);
-        setFeeds(prev => new Map(prev).set(key, { trips: forSlot(slot, trips), updatedMs: Date.now() }));
+        const mine = forSlot(slot, trips);
+        setFeeds(prev => new Map(prev).set(key, { trips: mine, updatedMs: Date.now(), firstSeen: rememberFirstSeen(prev.get(key)?.firstSeen ?? new Map(), mine) }));
       }),
     );
     return () => offs.forEach(off => off());
-  }, [state.slots]);
+  }, [source, state.slots, config.apiBaseUrl, config.perStop]);
 
   const loadStops = useCallback(
-    (token: number, origin: Origin | null) => requestStops({ dispatch, source: fixtureSource, token, reqId: ++reqs.current, origin }),
-    [],
+    (token: number, origin: Origin | null) => requestStops({ dispatch, source, token, reqId: ++reqs.current, origin }),
+    [source],
   );
 
   const perform = useCallback(
@@ -97,14 +138,14 @@ export default function App() {
       if (target.kind === 'locate') {
         if (screen.locate === 'locating') return;
         dispatch({ type: 'locating', token });
-        const here = await locate(client.geo);
+        const here = FAKE_FIX ?? (await locate(client.geo));
         if (!here) return dispatch({ type: 'locateFailed', token });
         dispatch({ type: 'origin', token, origin: here });
         return loadStops(token, here);
       }
-      return requestRoutes({ dispatch, source: fixtureSource, token, reqId: ++reqs.current, stop: target.stop });
+      return requestRoutes({ dispatch, source, token, reqId: ++reqs.current, stop: target.stop });
     },
-    [client, loadStops],
+    [client, source, loadStops],
   );
 
   const send = useCallback(
@@ -184,6 +225,8 @@ export default function App() {
       nowMs={nowMs}
       connection={connection}
       updatedMs={dataAsOf(everOpen, feed?.updatedMs ?? null)}
+      feedLink={slot ? (links.get(slotKey(slot)) ?? null) : null}
+      firstSeen={feed?.firstSeen ?? new Map()}
       onAddStop={() => void perform({ kind: 'openPicker' })}
     />
   );

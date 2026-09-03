@@ -260,7 +260,7 @@ describe('alerts', () => {
 describe('pickerMessage', () => {
   test('says what the list is doing when it is empty', () => {
     expect(pickerMessage('loading', 0, false)).toBe('Loading stops.');
-    expect(pickerMessage('ready', 0, false)).toBe('No stops found.');
+    expect(pickerMessage('ready', 0, false)).toBe('Use my location to find stops.');
   });
   test('counts the stops once they are in', () => {
     expect(pickerMessage('ready', 1, false)).toBe('1 stop found.');
@@ -402,5 +402,21 @@ describe('location', () => {
     expect(reduce(onRoutes, { type: 'back', at: 1 }).origin).not.toBeNull();
     expect(reduce(s, { type: 'back', at: 1 }).origin).toBeNull();
     expect(reduce(s, { type: 'preset', n: 1, at: 1 }).origin).toBeNull();
+  });
+});
+
+describe('slots from settings', () => {
+  test('replace the list and keep the index in range', () => {
+    const s = reduce({ ...base, index: 2 }, { type: 'slots', slots: [slot(9)] });
+    expect(s.slots).toEqual([slot(9)]);
+    expect(s.index).toBe(0);
+    expect(reduce(base, { type: 'slots', slots: [] }).index).toBe(0);
+  });
+});
+
+describe('picker copy without a location', () => {
+  test('asks for a location when the list is empty and none was used', () => {
+    expect(pickerMessage('ready', 0, false)).toBe('Use my location to find stops.');
+    expect(pickerMessage('ready', 0, true)).toBe('No stops found.');
   });
 });

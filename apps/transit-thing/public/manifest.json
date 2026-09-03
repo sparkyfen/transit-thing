@@ -60,7 +60,9 @@
     }
   ],
   "permissions": [
-    "geo"
+    "geo",
+    "net.fetch",
+    "net.ws"
   ],
   "art": {
     "heroPx": 248,
