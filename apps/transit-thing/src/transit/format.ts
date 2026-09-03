@@ -11,11 +11,56 @@ export function clockTime(epochSeconds: number): string {
   return new Date(epochSeconds * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-export function textOn(hex: string | null): '#0a0c0e' | '#efefef' {
-  if (!hex || !/^[0-9a-f]{6}$/i.test(hex)) return '#efefef';
-  const r = parseInt(hex.slice(0, 2), 16);
-  const g = parseInt(hex.slice(2, 4), 16);
-  const b = parseInt(hex.slice(4, 6), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.6 ? '#0a0c0e' : '#efefef';
+const DARK = '#0a0c0e';
+const LIGHT = '#efefef';
+const NO_COLOR = '#2a2f36';
+const MIN_RATIO = 4.5;
+
+export function routeHex(color: string | null | undefined): string | null {
+  return color && /^[0-9a-f]{6}$/i.test(color) ? `#${color.toLowerCase()}` : null;
+}
+
+function channels(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function toHex(rgb: [number, number, number]): string {
+  return `#${rgb.map(c => Math.round(c).toString(16).padStart(2, '0')).join('')}`;
+}
+
+function luminance(hex: string): number {
+  const [r, g, b] = channels(hex).map(c => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+export function contrastRatio(a: string, b: string): number {
+  const la = luminance(a);
+  const lb = luminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+function blend(hex: string, toward: string, amount: number): string {
+  const from = channels(hex);
+  const to = channels(toward);
+  return toHex(from.map((c, i) => c + (to[i]! - c) * amount) as [number, number, number]);
+}
+
+// keeps the agency color when it can carry readable text, else pulls it toward black or white until it does
+export function badgeColors(color: string | null | undefined): { bg: string; fg: string } {
+  const base = routeHex(color) ?? NO_COLOR;
+  const fg = contrastRatio(base, DARK) >= contrastRatio(base, LIGHT) ? DARK : LIGHT;
+  const toward = fg === DARK ? LIGHT : DARK;
+  let bg = base;
+  for (let amount = 0.05; contrastRatio(bg, fg) < MIN_RATIO && amount <= 1; amount += 0.05) {
+    bg = blend(base, toward, amount);
+  }
+  return { bg, fg };
+}
+
+export function textOn(color: string | null | undefined): string {
+  return badgeColors(color).fg;
 }

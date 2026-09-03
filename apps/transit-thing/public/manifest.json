@@ -2,7 +2,8 @@
   "id": "01a06478-f4f4-725a-8bc0-776641f7a436",
   "name": "transit-thing",
   "version": "0.1.0",
-  "description": "Next arrivals for your stops, live from Transit Tracker.",
+  "description": "Next arrivals for your stops, from a Transit Tracker server (tt.horner.tj by default). Reads this device's location only when you ask for nearby stops.",
+  "icon": "icon.svg",
   "settings": "settings.html",
   "config": [
     {
@@ -10,7 +11,7 @@
       "data": {
         "key": "apiBaseUrl",
         "label": "Transit Tracker API base URL",
-        "pattern": null,
+        "pattern": "^https://",
         "minLength": null,
         "maxLength": null,
         "default": "https://tt.horner.tj/"
@@ -20,7 +21,7 @@
       "type": "string",
       "data": {
         "key": "feed",
-        "label": "Feed code (for example st for Puget Sound)",
+        "label": "Feed code (st is Puget Sound)",
         "pattern": null,
         "minLength": null,
         "maxLength": null,
@@ -31,10 +32,10 @@
       "type": "string",
       "data": {
         "key": "slots",
-        "label": "Stops (JSON list of {stopId, stopName, routeIds}; empty uses the ones picked on the device)",
+        "label": "Stops as JSON: [{stopId, stopName, routeIds}] (blank uses the stops picked on the device)",
         "pattern": null,
         "minLength": null,
-        "maxLength": null,
+        "maxLength": 4000,
         "default": ""
       }
     },

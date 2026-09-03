@@ -1,3 +1,5 @@
+import type { Origin } from './geo';
+
 export type Mode = 'bus' | 'rail' | 'ferry' | 'tram';
 
 export interface Trip {
@@ -36,6 +38,6 @@ export interface Slot {
 
 export interface TransitSource {
   subscribe(slot: Slot, onTrips: (trips: Trip[]) => void): () => void;
-  stopsNear(lat: number, lon: number): Promise<Stop[]>;
+  stopsNear(origin: Origin | null): Promise<Stop[]>;
   routesAt(stopId: string): Promise<Route[]>;
 }

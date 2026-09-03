@@ -13,6 +13,7 @@
     "push": "bridgething-source run push",
     "share": "bridgething-source run share",
     "check": "bridgething-source check",
+    "test": "bun --filter './apps/*' test",
     "bump": "bridgething-source bump",
     "shot": "bridgething-source shot",
     "catalog": "bridgething-source catalog",
