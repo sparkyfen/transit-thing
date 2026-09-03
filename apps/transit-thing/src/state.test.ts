@@ -512,3 +512,24 @@ describe('picker copy without a location', () => {
     expect(pickerMessage('ready', 0, true)).toBe('No stops found.');
   });
 });
+
+describe('caps the store can read back', () => {
+  test('a 26th route is refused while the cursor still moves', () => {
+    const many: Route[] = Array.from({ length: 26 }, (_, i) => ({ routeId: `r${i}`, name: `${i}`, color: null, headsigns: [] }));
+    let s: State = { ...base, screen: { kind: 'routes', token: 1, latestReq: 0, stops: [stop], stop, routes: many, cursor: 0, chosen: [] } };
+    for (let i = 0; i < 26; i++) s = reduce(s, { type: 'toggleRoute', routeId: `r${i}`, at: i });
+    expect(s.screen.kind === 'routes' && s.screen.chosen.length).toBe(25);
+    expect(s.screen.kind === 'routes' && s.screen.cursor).toBe(25);
+  });
+  test('a 26th stop is not added', () => {
+    const full: State = {
+      ...base,
+      slots: Array.from({ length: 25 }, (_, i) => slot(i)),
+      screen: { kind: 'routes', token: 1, latestReq: 0, stops: [stop], stop, routes, cursor: 0, chosen: [] },
+    };
+    let s = reduce(full, { type: 'toggleRoute', routeId: 'a', at: 1 });
+    s = reduce(s, { type: 'saveSlot', at: 2 });
+    expect(s.slots).toHaveLength(25);
+    expect(s.screen.kind).toBe('routes');
+  });
+});

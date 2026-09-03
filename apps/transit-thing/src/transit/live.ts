@@ -98,6 +98,7 @@ export function liveSource(transport: Transport, config: () => LiveConfig, timer
               onTrips(msg.trips);
             } else if (msg.kind === 'heartbeat') {
               delay = RECONNECT_MIN_MS;
+              emit(slot, 'live');
             } else if (msg.kind === 'error') {
               socket?.close();
               lost('server error');

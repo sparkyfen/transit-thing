@@ -25,7 +25,22 @@ function parseBaseUrl(value: string): string | null {
   return u.toString();
 }
 
-const MAX_SLOTS = 25;
+export const MAX_SLOTS = 25;
+
+// one entry from settings or the device store; null when any field is off
+export function parseSlot(r: unknown): Slot | null {
+  if (typeof r !== 'object' || r === null) return null;
+  const { stopId: rawStopId, stopName, routeIds: rawRouteIds } = r as Record<string, unknown>;
+  if (typeof rawStopId !== 'string') return null;
+  const stopId = rawStopId.trim();
+  if (!ID.test(stopId)) return null;
+  if (typeof stopName !== 'string' || stopName.trim().length === 0 || stopName.length > MAX_NAME) return null;
+  if (!Array.isArray(rawRouteIds) || rawRouteIds.length === 0 || rawRouteIds.length > MAX_PAIRS) return null;
+  if (!rawRouteIds.every(id => typeof id === 'string')) return null;
+  const routeIds = (rawRouteIds as string[]).map(id => id.trim());
+  if (!routeIds.every(id => ID.test(id))) return null;
+  return { stopId, stopName, routeIds };
+}
 
 // the whole value is dropped on any bad entry so a half-valid paste never renders
 export function parseSlots(value: string): Slot[] | null {
@@ -39,20 +54,12 @@ export function parseSlots(value: string): Slot[] | null {
   const slots: Slot[] = [];
   const keys = new Set<string>();
   for (const r of raw) {
-    if (typeof r !== 'object' || r === null) return null;
-    const { stopId: rawStopId, stopName, routeIds: rawRouteIds } = r as Record<string, unknown>;
-    if (typeof rawStopId !== 'string') return null;
-    const stopId = rawStopId.trim();
-    if (!ID.test(stopId)) return null;
-    if (typeof stopName !== 'string' || stopName.length === 0 || stopName.length > MAX_NAME) return null;
-    if (!Array.isArray(rawRouteIds) || rawRouteIds.length === 0 || rawRouteIds.length > MAX_PAIRS) return null;
-    if (!rawRouteIds.every(id => typeof id === 'string')) return null;
-    const routeIds = (rawRouteIds as string[]).map(id => id.trim());
-    if (!routeIds.every(id => ID.test(id))) return null;
-    const slot = { stopId, stopName, routeIds };
+    const slot = parseSlot(r);
+    if (!slot) return null;
     // the same stop and routes twice would open two sockets for one board entry; the first one wins
-    if (keys.has(slotKey(slot))) continue;
-    keys.add(slotKey(slot));
+    const key = slotKey(slot);
+    if (keys.has(key)) continue;
+    keys.add(key);
     slots.push(slot);
   }
   return slots;

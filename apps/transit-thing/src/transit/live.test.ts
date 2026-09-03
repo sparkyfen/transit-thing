@@ -76,7 +76,8 @@ describe('liveSource.subscribe', () => {
       JSON.stringify({ event: 'schedule', data: { trips: [{ tripId: 't', stopId: 's', routeId: 'r', arrivalTime: 1, departureTime: 1 }] } }),
     );
     expect(got).toEqual([1]);
-    expect(statuses).toEqual(['connecting', 'live']);
+    // the heartbeat already proves the socket is alive, so it reads live before the schedule
+    expect(statuses).toEqual(['connecting', 'live', 'live']);
   });
 
   test('reconnects with backoff after a close and resets after a schedule', () => {

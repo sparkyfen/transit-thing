@@ -35,7 +35,8 @@ describe('subscribeMessage', () => {
     const msg = JSON.parse(subscribeMessage(slot, 3));
     expect(msg.event).toBe('schedule:subscribe');
     expect(msg.data.routeStopPairs).toBe('st:1_100133,st:1_67652;st:40_100239,st:1_67652');
-    expect(msg.data.limit).toBe(3);
+    // two pairs, three per route: the server limit is a total
+    expect(msg.data.limit).toBe(6);
     expect(JSON.parse(subscribeMessage(slot, 99)).data.limit).toBe(20);
     expect(JSON.parse(subscribeMessage(slot, 0)).data.limit).toBe(1);
   });
@@ -186,5 +187,12 @@ describe('parseStops and parseRoutes', () => {
     expect(parseStops(stops).at(-1)?.stopId).toBe('s199');
     const routes = Array.from({ length: 150 }, (_, i) => ({ routeId: `r${i}` }));
     expect(parseRoutes(routes)).toHaveLength(100);
+  });
+});
+
+describe('empty names', () => {
+  test('fall back to the id so a saved stop can be read back', () => {
+    const stops = parseStops([{ stopId: 'st:1_1', stopCode: '1', name: '  ', lat: 1, lon: 2 }]);
+    expect(stops[0]?.name).toBe('st:1_1');
   });
 });

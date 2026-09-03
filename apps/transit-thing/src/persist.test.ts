@@ -48,8 +48,8 @@ describe('persistSlots', () => {
     expect(fake.value()).toBeNull();
   });
   test('a store that rejects or refuses is not fatal', async () => {
-    await expect(persistSlots(fakeStore({ fail: 'reject' }).store, slots)).resolves.toBeUndefined();
-    await expect(persistSlots(fakeStore({ fail: 'error' }).store, [])).resolves.toBeUndefined();
+    await expect(persistSlots(fakeStore({ fail: 'reject' }).store, slots)).resolves.toBe(false);
+    await expect(persistSlots(fakeStore({ fail: 'error' }).store, [])).resolves.toBe(false);
   });
 });
 
@@ -69,5 +69,14 @@ describe('loadSlots', () => {
   test('a store that rejects or refuses answers null so the load can be retried', async () => {
     expect(await loadSlots(fakeStore({ fail: 'reject' }).store)).toBeNull();
     expect(await loadSlots(fakeStore({ fail: 'error' }).store)).toBeNull();
+  });
+});
+
+describe('a saved list with one bad entry', () => {
+  test('keeps the entries that still parse', async () => {
+    const good = { stopId: 'st:1_67652', stopName: 'Bay 9', routeIds: ['st:1_100133'] };
+    const bad = { stopId: 'st:1_1', stopName: '', routeIds: ['r'] };
+    const store = fakeStore({ value: JSON.stringify([bad, good]) }).store;
+    expect(await loadSlots(store)).toEqual([good]);
   });
 });

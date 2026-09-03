@@ -49,9 +49,11 @@ export function routesAtUrl(base: string, stopId: string): string {
 
 export function subscribeMessage(slot: Slot, limit: number): string {
   const pairs = slot.routeIds.slice(0, MAX_PAIRS).map(routeId => `${routeId},${slot.stopId}`);
+  // the server limit is a total across pairs, so ask for a few per route and let the board pick the soonest
+  const total = Math.max(1, Math.min(MAX_LIMIT, limit * pairs.length));
   return JSON.stringify({
     event: 'schedule:subscribe',
-    data: { routeStopPairs: pairs.join(';'), limit: Math.max(1, Math.min(MAX_LIMIT, limit)), listMode: 'sequential' },
+    data: { routeStopPairs: pairs.join(';'), limit: total, listMode: 'sequential' },
   });
 }
 
@@ -70,7 +72,8 @@ function num(v: unknown): number | undefined {
 }
 
 function name(v: unknown, fallback: string): string {
-  return str(v, fallback).slice(0, MAX_NAME);
+  const value = str(v, '').trim();
+  return (value.length > 0 ? value : fallback).slice(0, MAX_NAME);
 }
 
 // every field the board reads is checked, because the server is a third party and the kiosk has no error boundary

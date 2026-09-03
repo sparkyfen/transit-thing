@@ -133,8 +133,9 @@ export default function App() {
   useEffect(() => {
     const json = JSON.stringify(device);
     if (persisted.current === null || persisted.current === json) return;
-    persisted.current = json;
-    void persistSlots(client.store, device);
+    void persistSlots(client.store, device).then(ok => {
+      if (ok) persisted.current = json;
+    });
   }, [client, device]);
 
   useEffect(() => client.config.onChanged(c => setConfig(prev => applyConfig(prev, c.key, c.value))), [client]);

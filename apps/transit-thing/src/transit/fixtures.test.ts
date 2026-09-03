@@ -39,3 +39,16 @@ describe('fixtureSource', () => {
     expect(routes.some(r => r.length === 0)).toBe(true);
   });
 });
+
+describe('fixture status', () => {
+  test('reports live on subscribe and stops after unsubscribe', () => {
+    const seen: string[] = [];
+    const off = fixtureSource.onStatus((_, status) => seen.push(status));
+    const unsub = fixtureSource.subscribe(FIXTURE_SLOTS[0]!, () => {});
+    expect(seen).toEqual(['live']);
+    unsub();
+    off();
+    fixtureSource.subscribe(FIXTURE_SLOTS[0]!, () => {})();
+    expect(seen).toEqual(['live']);
+  });
+});

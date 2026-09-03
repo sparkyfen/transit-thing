@@ -1,4 +1,6 @@
 import { haversine, type Origin } from './transit/geo';
+import { MAX_SLOTS } from './config';
+import { MAX_PAIRS } from './transit/api';
 import { slotKey } from './transit/trips';
 import type { Route, Slot, Stop } from './transit/types';
 
@@ -237,7 +239,10 @@ function step(state: State, action: Action): State {
       const id = action.routeId;
       const cursor = screen.routes.findIndex(r => r.routeId === id);
       if (cursor < 0) return touched;
-      const chosen = screen.chosen.includes(id) ? screen.chosen.filter(r => r !== id) : [...screen.chosen, id];
+      const on = screen.chosen.includes(id);
+      // more routes than one subscription can carry would be silently dropped, so the pick is refused instead
+      if (!on && screen.chosen.length >= MAX_PAIRS) return { ...touched, screen: { ...screen, cursor } };
+      const chosen = on ? screen.chosen.filter(r => r !== id) : [...screen.chosen, id];
       return { ...touched, screen: { ...screen, chosen, cursor } };
     }
     case 'saveSlot': {
@@ -245,6 +250,7 @@ function step(state: State, action: Action): State {
       const slot: Slot = { stopId: screen.stop.stopId, stopName: screen.stop.name, routeIds: screen.chosen };
       const existing = state.slots.findIndex(s => slotKey(s) === slotKey(slot));
       if (existing >= 0) return { ...touched, index: existing, screen: { kind: 'board' } };
+      if (state.slots.length >= MAX_SLOTS) return touched;
       const slots = [...state.slots, slot];
       return { ...touched, slots, index: slots.length - 1, screen: { kind: 'board' } };
     }
