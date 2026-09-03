@@ -7,7 +7,8 @@ const EARLY_S = -60;
 
 // servers on the delaySeconds fork say it outright; elsewhere the first prediction seen per trip is the baseline
 export function lateness(trip: Trip, firstSeen: Map<string, number>): Lateness {
-  const delay = trip.delaySeconds ?? (firstSeen.has(trip.tripId) ? trip.arrivalTime - firstSeen.get(trip.tripId)! : 0);
+  const baseline = firstSeen.get(trip.tripId);
+  const delay = trip.delaySeconds ?? (baseline === undefined ? 0 : trip.arrivalTime - baseline);
   if (delay >= LATE_S) return { kind: 'late', minutes: Math.round(delay / 60) };
   if (delay <= EARLY_S) return { kind: 'early', minutes: Math.round(-delay / 60) };
   return null;

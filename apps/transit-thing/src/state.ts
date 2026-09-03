@@ -118,6 +118,11 @@ function sameKeys(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((k, i) => k === b[i]);
 }
 
+// a settings edit that only renames a stop keeps its key, so the name is checked beside it
+function sameSlots(a: Slot[], b: Slot[]): boolean {
+  return sameKeys(a.map(slotKey), b.map(slotKey)) && sameKeys(a.map(s => s.stopName), b.map(s => s.stopName));
+}
+
 export function sortByDistance(stops: Stop[], origin: Origin | null): Stop[] {
   if (!origin) return stops;
   const from = (s: Stop) => haversine(origin.lat, origin.lon, s.lat, s.lon);
@@ -181,7 +186,7 @@ function step(state: State, action: Action): State {
           return !state.configKeys.includes(key) && !configKeys.includes(key);
         }),
       ];
-      if (sameKeys(slots.map(slotKey), currentKeys) && sameKeys(configKeys, state.configKeys)) return state;
+      if (sameSlots(slots, state.slots) && sameKeys(configKeys, state.configKeys)) return state;
       const current = currentKeys[state.index];
       const kept = current === undefined ? -1 : slots.findIndex(s => slotKey(s) === current);
       const index = kept >= 0 ? kept : Math.min(state.index, Math.max(0, slots.length - 1));

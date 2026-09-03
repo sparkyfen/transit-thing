@@ -438,6 +438,14 @@ describe('slots from settings', () => {
     expect(next.slots).toEqual([edited]);
     expect(next.index).toBe(0);
   });
+  test('renaming a settings stop updates the board', () => {
+    const s = reduce({ ...base, slots: [] }, { type: 'slots', slots: [slot(9)] });
+    const renamed = { ...slot(9), stopName: 'Renamed 9' };
+    const next = reduce(s, { type: 'slots', slots: [renamed] });
+    expect(next).not.toBe(s);
+    expect(next.slots).toEqual([renamed]);
+    expect(next.index).toBe(0);
+  });
   test('a dial-added stop survives a settings change', () => {
     let s = reduce({ ...base, slots: [] }, { type: 'slots', slots: [slot(9)] });
     s = reduce(routesScreen(s), { type: 'toggleRoute', routeId: 'a', at: 1 });

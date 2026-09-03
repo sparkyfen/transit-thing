@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { ApiError, LINK_WAIT_MS, liveSource, nextDelay, RECONNECT_MAX_MS, RECONNECT_MIN_MS, WATCHDOG_MS } from './live';
-import { LINK_DOWN, MAX_BODY_BYTES, type Socket, type SocketHandlers, type Transport } from './transport';
+import { ApiError, LINK_WAIT_MS, liveSource, MAX_FRAME_CHARS, nextDelay, RECONNECT_MAX_MS, RECONNECT_MIN_MS, WATCHDOG_MS } from './live';
+import { LINK_DOWN, type Socket, type SocketHandlers, type Transport } from './transport';
 
 const slot = { stopId: 'st:1_67652', stopName: 'Bay 9', routeIds: ['st:1_100133'] };
 const config = () => ({ baseUrl: 'https://tt.horner.tj/', feed: 'st', perStop: 3 });
@@ -163,7 +163,7 @@ describe('liveSource.subscribe', () => {
     sockets[0]!.handlers.onOpen();
     const one = '{"tripId":"t","stopId":"s","routeId":"r","arrivalTime":1}';
     const frame = `{"event":"schedule","data":{"trips":[${`${one},`.repeat(6000)}${one}]}}`;
-    expect(frame.length).toBeGreaterThan(MAX_BODY_BYTES);
+    expect(frame.length).toBeGreaterThan(MAX_FRAME_CHARS);
     sockets[0]!.handlers.onText(frame);
     expect(got).toEqual([]);
     expect(statuses).toEqual(['connecting']);

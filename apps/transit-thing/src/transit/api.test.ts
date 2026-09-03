@@ -151,6 +151,11 @@ describe('parseStops and parseRoutes', () => {
     ]);
     expect(parseRoutes([{ routeId: '<r>' }, { routeId: 'r', name: long, headsigns: [long] }])).toEqual([{ routeId: 'r', name: 'x'.repeat(80), color: null, headsigns: ['x'.repeat(80)] }]);
   });
+  test('a 64-character id is accepted', () => {
+    const id = 'a'.repeat(64);
+    expect(parseStops([{ stopId: id, lat: 1, lon: 2 }])).toHaveLength(1);
+    expect(parseRoutes([{ routeId: id }])).toHaveLength(1);
+  });
   test('an id may hold a space, as the MTA feeds do', () => {
     expect(parseRoutes([{ routeId: 'nymtabus:MTA NYCT_M42' }])).toEqual([{ routeId: 'nymtabus:MTA NYCT_M42', name: 'nymtabus:MTA NYCT_M42', color: null, headsigns: [] }]);
     expect(parseStops([{ stopId: 'nymtabus:MTA NYCT_M42', lat: 1, lon: 2 }])).toHaveLength(1);

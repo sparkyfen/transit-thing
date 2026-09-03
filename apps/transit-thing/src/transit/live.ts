@@ -5,6 +5,9 @@ import type { Route, Slot, Stop, TransitSource } from './types';
 
 export type FeedStatus = 'connecting' | 'live' | 'reconnecting';
 
+// a frame is measured in characters, not bytes; the same cap as the fetch bodies is plenty for a schedule
+export const MAX_FRAME_CHARS = MAX_BODY_BYTES;
+
 export interface LiveConfig {
   baseUrl: string;
   feed: string;
@@ -84,7 +87,7 @@ export function liveSource(transport: Transport, config: () => LiveConfig, timer
             socket?.send(subscribeMessage(slot, perStop));
           },
           onText: text => {
-            if (text.length > MAX_BODY_BYTES) return;
+            if (text.length > MAX_FRAME_CHARS) return;
             const msg = parseServerMessage(text);
             if (msg.kind === 'schedule') {
               arm();

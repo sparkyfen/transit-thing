@@ -20,7 +20,7 @@ interface WsErrorEvent {
 const encode = (text: string) => new TextEncoder().encode(text);
 
 // the transport only needs the net surface, so the fake is a structural object cast to the client type
-function fakeClient(opts: { fetch?: { status: number; body: Uint8Array } | 'fail'; open?: 'ok' | 'fail' | 'reject'; close?: 'reject'; link?: string } = {}) {
+function fakeClient(opts: { fetch?: { status: number; body: Uint8Array } | 'fail'; open?: 'ok' | 'fail' | 'reject'; send?: 'reject'; close?: 'reject'; link?: string } = {}) {
   const messages = new Set<Listener<WsMessage>>();
   const closes = new Set<Listener<WsClosed>>();
   const errors = new Set<Listener<WsErrorEvent>>();
@@ -53,6 +53,7 @@ function fakeClient(opts: { fetch?: { status: number; body: Uint8Array } | 'fail
     },
     wsSend: async (req: { connectionId: string; frame: { type: 'text'; data: string } }) => {
       sent.push({ connectionId: req.connectionId, text: req.frame.data });
+      if (opts.send === 'reject') throw new Error('rpc timeout');
     },
     wsClose: async (req: { connectionId: string; reason: string }) => {
       closed.push(req.connectionId);
@@ -213,6 +214,17 @@ describe('daemonTransport sockets', () => {
     expect(fake.sent).toEqual([]);
   });
 
+  test('a send rpc that fails is swallowed', async () => {
+    const fake = fakeClient({ send: 'reject' });
+    const { events, handlers } = recorder();
+    const socket = daemonTransport(fake.client).open('wss://tt.horner.tj/', handlers);
+    await tick();
+    socket.send('sub');
+    await tick();
+    expect(fake.sent.map(s => s.text)).toEqual(['sub']);
+    expect(events).toEqual(['open']);
+  });
+
   test('a close rpc that fails is swallowed', async () => {
     const fake = fakeClient({ close: 'reject' });
     const { events, handlers } = recorder();
@@ -333,10 +345,11 @@ describe('browserTransport', () => {
     expect(ws.sent).toEqual(['sub']);
   });
 
-  test('close() suppresses the close event that follows', () => {
+  test('close() suppresses the close event and any message that follows', () => {
     class FakeWebSocket {
       static OPEN = 1;
       readyState = 1;
+      onmessage: ((e: { data: unknown }) => void) | null = null;
       onclose: ((e: { code: number; reason: string }) => void) | null = null;
       static last: FakeWebSocket | null = null;
       constructor(readonly url: string) {
@@ -351,6 +364,7 @@ describe('browserTransport', () => {
     const { events, handlers } = recorder();
     const socket = browserTransport().open('wss://tt.horner.tj/', handlers);
     socket.close();
+    FakeWebSocket.last!.onmessage!({ data: 'late' });
     FakeWebSocket.last!.onclose!({ code: 1000, reason: 'bye' });
     expect(events).toEqual([]);
   });

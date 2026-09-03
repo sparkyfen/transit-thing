@@ -1,4 +1,4 @@
-import { ID, MAX_PAIRS } from './transit/api';
+import { ID, MAX_NAME, MAX_PAIRS } from './transit/api';
 import type { Slot } from './transit/types';
 
 export interface Config {
@@ -42,7 +42,7 @@ export function parseSlots(value: string): Slot[] | null {
     if (typeof rawStopId !== 'string') return null;
     const stopId = rawStopId.trim();
     if (!ID.test(stopId)) return null;
-    if (typeof stopName !== 'string' || stopName.length === 0 || stopName.length > 80) return null;
+    if (typeof stopName !== 'string' || stopName.length === 0 || stopName.length > MAX_NAME) return null;
     if (!Array.isArray(rawRouteIds) || rawRouteIds.length === 0 || rawRouteIds.length > MAX_PAIRS) return null;
     if (!rawRouteIds.every(id => typeof id === 'string')) return null;
     const routeIds = (rawRouteIds as string[]).map(id => id.trim());

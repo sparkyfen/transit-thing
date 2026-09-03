@@ -56,7 +56,7 @@ export function browserTransport(): Transport {
       };
       ws.onopen = () => handlers.onOpen();
       ws.onmessage = e => {
-        if (typeof e.data === 'string') handlers.onText(e.data);
+        if (!closed && typeof e.data === 'string') handlers.onText(e.data);
       };
       ws.onclose = e => shutdown(e.reason || `closed ${e.code}`);
       ws.onerror = () => shutdown('socket error');
@@ -137,7 +137,7 @@ export function daemonTransport(client: BridgethingClient): Transport {
       }
       return {
         send: text => {
-          if (!closed) void client.net.wsSend({ connectionId, frame: { type: 'text', data: text } });
+          if (!closed) client.net.wsSend({ connectionId, frame: { type: 'text', data: text } }).catch(() => {});
         },
         close: () => {
           if (closed) return;

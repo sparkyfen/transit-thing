@@ -8,7 +8,7 @@ const MAX_LIMIT = 20;
 // server ids and the ids a user pastes into settings pass the same charset test; a space may sit inside
 // an id but not at either end, and an id of dots only is a path, not an id
 export const ID = /^(?!\.+$)[A-Za-z0-9:_.-](?:[A-Za-z0-9:_. -]{0,62}[A-Za-z0-9:_.-])?$/;
-const MAX_NAME = 80;
+export const MAX_NAME = 80;
 const MAX_STOPS = 200;
 const MAX_ROUTES = 100;
 // the server limit is a total across pairs and the trips arrive in arrival order, so the cap never drops a sooner arrival
