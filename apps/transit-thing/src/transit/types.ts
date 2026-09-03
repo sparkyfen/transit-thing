@@ -14,6 +14,8 @@ export interface Trip {
   // mirrors the API payload; nothing reads it yet
   departureTime: number;
   isRealtime: boolean;
+  // seconds late (positive) or early; only servers running the delaySeconds fork send it
+  delaySeconds?: number;
 }
 
 export interface Stop {
