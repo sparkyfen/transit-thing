@@ -20,7 +20,7 @@ interface WsErrorEvent {
 const encode = (text: string) => new TextEncoder().encode(text);
 
 // the transport only needs the net surface, so the fake is a structural object cast to the client type
-function fakeClient(opts: { fetch?: { status: number; body: Uint8Array } | 'fail'; open?: 'ok' | 'fail' | 'reject'; link?: string } = {}) {
+function fakeClient(opts: { fetch?: { status: number; body: Uint8Array } | 'fail'; open?: 'ok' | 'fail' | 'reject'; close?: 'reject'; link?: string } = {}) {
   const messages = new Set<Listener<WsMessage>>();
   const closes = new Set<Listener<WsClosed>>();
   const errors = new Set<Listener<WsErrorEvent>>();
@@ -57,6 +57,7 @@ function fakeClient(opts: { fetch?: { status: number; body: Uint8Array } | 'fail
     wsClose: async (req: { connectionId: string; reason: string }) => {
       closed.push(req.connectionId);
       closeReasons.push(req.reason);
+      if (opts.close === 'reject') throw new Error('rpc timeout');
     },
   };
   const on = (h: Listener<{ type: string }>) => (links.add(h), () => links.delete(h));
@@ -123,7 +124,6 @@ describe('daemonTransport sockets', () => {
     await tick();
     expect(events).toEqual(['close:Error: rpc timeout']);
     expect(fake.listeners()).toBe(0);
-    expect(fake.linkListeners()).toBe(0);
     expect(fake.closed).toEqual([fake.opened[0]]);
     expect(fake.closeReasons).toEqual(['abandoned']);
   });
@@ -138,12 +138,12 @@ describe('daemonTransport sockets', () => {
     expect(fake.opened).toEqual([]);
     expect(fake.closed).toEqual([]);
     expect(fake.listeners()).toBe(0);
-    expect(fake.linkListeners()).toBe(0);
   });
 
-  test('losing the daemon link closes every open socket and the link listener goes with the last socket', async () => {
+  test('losing the daemon link closes every open socket through the one link listener', async () => {
     const fake = fakeClient();
     const transport = daemonTransport(fake.client);
+    expect(fake.linkListeners()).toBe(1);
     const a = recorder();
     const b = recorder();
     const c = recorder();
@@ -153,7 +153,6 @@ describe('daemonTransport sockets', () => {
     await tick();
     expect(fake.linkListeners()).toBe(1);
     third.close();
-    expect(fake.linkListeners()).toBe(1);
     fake.link('connecting');
     expect(a.events).toEqual(['open']);
     fake.link('close');
@@ -161,10 +160,25 @@ describe('daemonTransport sockets', () => {
     expect(b.events).toEqual(['open', 'close:daemon link lost']);
     expect(c.events).toEqual(['open']);
     expect(fake.listeners()).toBe(0);
-    expect(fake.linkListeners()).toBe(0);
+    expect(fake.linkListeners()).toBe(1);
     expect(fake.closed).toEqual([fake.opened[2]]);
     fake.link('close');
     expect(a.events).toHaveLength(2);
+  });
+
+  test('onLinkOpen fires on the daemon open event until unsubscribed', () => {
+    const fake = fakeClient();
+    const transport = daemonTransport(fake.client);
+    let opens = 0;
+    const off = transport.onLinkOpen(() => opens++);
+    fake.link('connecting');
+    fake.link('close');
+    expect(opens).toBe(0);
+    fake.link('open');
+    expect(opens).toBe(1);
+    off();
+    fake.link('open');
+    expect(opens).toBe(1);
   });
 
   test('a close from the daemon runs every unsubscribe and later events are ignored', async () => {
@@ -197,6 +211,17 @@ describe('daemonTransport sockets', () => {
     socket.send('after');
     expect(events).toEqual(['open']);
     expect(fake.sent).toEqual([]);
+  });
+
+  test('a close rpc that fails is swallowed', async () => {
+    const fake = fakeClient({ close: 'reject' });
+    const { events, handlers } = recorder();
+    const socket = daemonTransport(fake.client).open('wss://tt.horner.tj/', handlers);
+    await tick();
+    socket.close();
+    await tick();
+    expect(events).toEqual(['open']);
+    expect(fake.closeReasons).toEqual(['done']);
   });
 
   test('an error event before the open reply wins, and the reply is then ignored', async () => {

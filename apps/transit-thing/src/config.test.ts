@@ -54,6 +54,14 @@ describe('apiBaseUrl and slots', () => {
     const value = JSON.stringify([{ stopId: 'nymtabus:MTA NYCT_M42', stopName: 'x', routeIds: ['nymtabus:MTA NYCT_M42'] }]);
     expect(applyConfig(DEFAULT_CONFIG, 'slots', value).slots).toEqual([{ stopId: 'nymtabus:MTA NYCT_M42', stopName: 'x', routeIds: ['nymtabus:MTA NYCT_M42'] }]);
   });
+  test('trims ids from settings and rejects delimiters and dots only', () => {
+    const value = JSON.stringify([{ stopId: ' st:1_67652', stopName: 'x', routeIds: ['st:1_100133 '] }]);
+    expect(applyConfig(DEFAULT_CONFIG, 'slots', value).slots).toEqual([{ stopId: 'st:1_67652', stopName: 'x', routeIds: ['st:1_100133'] }]);
+    for (const bad of ['a,b', 'a;b', '.', '..', ' ']) {
+      expect(applyConfig(DEFAULT_CONFIG, 'slots', JSON.stringify([{ stopId: bad, stopName: 'x', routeIds: ['r'] }]))).toBe(DEFAULT_CONFIG);
+      expect(applyConfig(DEFAULT_CONFIG, 'slots', JSON.stringify([{ stopId: 's', stopName: 'x', routeIds: [bad] }]))).toBe(DEFAULT_CONFIG);
+    }
+  });
   test('caps the slot count, the routes per slot, and the stop name', () => {
     const entry = (i: number, routes = 1, name = 'x') => ({ stopId: `s${i}`, stopName: name, routeIds: Array.from({ length: routes }, (_, r) => `r${r}`) });
     expect(applyConfig(DEFAULT_CONFIG, 'slots', JSON.stringify(Array.from({ length: 25 }, (_, i) => entry(i)))).slots).toHaveLength(25);

@@ -5,8 +5,9 @@ import type { Route, Slot, Stop, Trip } from './types';
 export const MAX_PAIRS = 25;
 const MAX_LIMIT = 20;
 
-// server ids and the ids a user pastes into settings pass the same charset test
-export const ID = /^[A-Za-z0-9:_. -]{1,64}$/;
+// server ids and the ids a user pastes into settings pass the same charset test; a space may sit inside
+// an id but not at either end, and an id of dots only is a path, not an id
+export const ID = /^(?!\.+$)[A-Za-z0-9:_.-](?:[A-Za-z0-9:_. -]{0,62}[A-Za-z0-9:_.-])?$/;
 const MAX_NAME = 80;
 const MAX_STOPS = 200;
 const MAX_ROUTES = 100;

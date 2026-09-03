@@ -97,6 +97,16 @@ describe('parseServerMessage', () => {
     expect(parseTrip({ ...trip, routeId: 'r'.repeat(65) })).toBeNull();
     expect(parseTrip({ ...trip, tripId: 'st:1_ABC.x-y' })).not.toBeNull();
   });
+  test('ids reject the pair delimiters, a space at either end, and dots only', () => {
+    for (const bad of ['a,b', 'a;b', ' a', 'a ', '.', '..', ' ']) {
+      expect(parseTrip({ ...trip, routeId: bad })).toBeNull();
+      expect(parseTrip({ ...trip, stopId: bad })).toBeNull();
+      expect(parseTrip({ ...trip, tripId: bad })).toBeNull();
+    }
+    expect(parseTrip({ ...trip, tripId: 'a.b' })).not.toBeNull();
+    expect(parseTrip({ ...trip, tripId: '.a.' })).not.toBeNull();
+    expect(parseTrip({ ...trip, tripId: 'a' })).not.toBeNull();
+  });
   test('recognizes heartbeats and errors', () => {
     expect(parseServerMessage(JSON.stringify({ event: 'heartbeat', data: null })).kind).toBe('heartbeat');
     expect(parseServerMessage(JSON.stringify({ status: 'error', message: 'Bad Request' }))).toEqual({ kind: 'error', message: 'Bad Request' });
@@ -144,6 +154,12 @@ describe('parseStops and parseRoutes', () => {
   test('an id may hold a space, as the MTA feeds do', () => {
     expect(parseRoutes([{ routeId: 'nymtabus:MTA NYCT_M42' }])).toEqual([{ routeId: 'nymtabus:MTA NYCT_M42', name: 'nymtabus:MTA NYCT_M42', color: null, headsigns: [] }]);
     expect(parseStops([{ stopId: 'nymtabus:MTA NYCT_M42', lat: 1, lon: 2 }])).toHaveLength(1);
+  });
+  test('drop ids with a delimiter, a space at either end, or dots only', () => {
+    for (const bad of ['a,b', 'a;b', 'a ', ' a', '.', '..']) {
+      expect(parseStops([{ stopId: bad, lat: 1, lon: 2 }])).toEqual([]);
+      expect(parseRoutes([{ routeId: bad }])).toEqual([]);
+    }
   });
   test('keep the first 200 stops and 100 routes', () => {
     const stops = Array.from({ length: 250 }, (_, i) => ({ stopId: `s${i}`, lat: 1, lon: 2 }));

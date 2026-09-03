@@ -36,9 +36,10 @@ const ALERTS: Record<PickerAlert, string> = {
   locate: "Couldn't get this device's location.",
   routes: "Couldn't load routes for that stop. Try again.",
 };
-const RATE_LIMITED: Record<Exclude<PickerAlert, 'locate'>, string> = {
+const RATE_LIMITED: Record<Exclude<PickerAlert, 'locate'> | 'load', string> = {
   refresh: 'Too many requests. Showing the stops found earlier.',
   routes: 'Too many requests. Try again in a minute.',
+  load: 'Too many requests. Try loading stops again in a minute.',
 };
 
 export function alertText(alert: PickerAlert | null, reason: FailReason): string {
@@ -47,7 +48,7 @@ export function alertText(alert: PickerAlert | null, reason: FailReason): string
 }
 
 export function loadFailedText(reason: FailReason): string {
-  return reason === 'rateLimited' ? RATE_LIMITED.routes : "Couldn't load stops.";
+  return reason === 'rateLimited' ? RATE_LIMITED.load : "Couldn't load stops.";
 }
 
 interface StopsProps {

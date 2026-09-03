@@ -174,7 +174,13 @@ function step(state: State, action: Action): State {
       const configKeys = action.slots.map(slotKey);
       const currentKeys = state.slots.map(slotKey);
       // settings come first, then whatever the dial added that settings do not name
-      const slots = [...action.slots, ...state.slots.filter((_, i) => !state.configKeys.includes(currentKeys[i]!) && !configKeys.includes(currentKeys[i]!))];
+      const slots = [
+        ...action.slots,
+        ...state.slots.filter(s => {
+          const key = slotKey(s);
+          return !state.configKeys.includes(key) && !configKeys.includes(key);
+        }),
+      ];
       if (sameKeys(slots.map(slotKey), currentKeys) && sameKeys(configKeys, state.configKeys)) return state;
       const current = currentKeys[state.index];
       const kept = current === undefined ? -1 : slots.findIndex(s => slotKey(s) === current);

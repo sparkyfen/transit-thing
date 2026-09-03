@@ -19,6 +19,8 @@ export const RECONNECT_MIN_MS = 1_000;
 export const RECONNECT_MAX_MS = 30_000;
 // the server heartbeats well inside this; a socket silent for longer is gone even if nothing said so
 export const WATCHDOG_MS = 75_000;
+// a dial refused for a missing daemon link waits for the link to come back; the fallback covers a missed open event
+export const LINK_WAIT_MS = 30_000;
 
 export function nextDelay(current: number): number {
   return Math.min(RECONNECT_MAX_MS, current * 2);
@@ -56,6 +58,7 @@ export function liveSource(transport: Transport, config: () => LiveConfig, timer
       let socket: Socket | null = null;
       let timer: ReturnType<typeof setTimeout> | null = null;
       let watchdog: ReturnType<typeof setTimeout> | null = null;
+      let offLink: (() => void) | null = null;
       let delay = RECONNECT_MIN_MS;
       let stopped = false;
 
@@ -105,13 +108,25 @@ export function liveSource(transport: Transport, config: () => LiveConfig, timer
         if (stopped || timer) return;
         socket = null;
         emit(slot, 'reconnecting');
-        // with no daemon link nothing was tried, so the first dial after the link returns should not wait
-        if (reason === LINK_DOWN) delay = RECONNECT_MIN_MS;
+        // with no daemon link nothing was tried, so the redial waits for the link and starts from the minimum
+        if (reason === LINK_DOWN) {
+          delay = RECONNECT_MIN_MS;
+          const redial = () => {
+            offLink?.();
+            offLink = null;
+            if (timer) timers.clearTimeout(timer);
+            timer = null;
+            dial();
+          };
+          offLink = transport.onLinkOpen(redial);
+          timer = timers.setTimeout(redial, LINK_WAIT_MS);
+          return;
+        }
         timer = timers.setTimeout(() => {
           timer = null;
           dial();
         }, delay);
-        if (reason !== LINK_DOWN) delay = nextDelay(delay);
+        delay = nextDelay(delay);
       };
 
       emit(slot, 'connecting');
@@ -119,6 +134,8 @@ export function liveSource(transport: Transport, config: () => LiveConfig, timer
       return () => {
         stopped = true;
         disarm();
+        offLink?.();
+        offLink = null;
         if (timer) timers.clearTimeout(timer);
         socket?.close();
         socket = null;

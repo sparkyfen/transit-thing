@@ -15,6 +15,8 @@ export interface Socket {
 export interface Transport {
   getJson(url: string): Promise<{ status: number; body: unknown }>;
   open(url: string, handlers: SocketHandlers): Socket;
+  // fires when the daemon link comes back, so a caller refused with LINK_DOWN can redial without polling
+  onLinkOpen(handler: () => void): () => void;
 }
 
 // a stops reply for a full box is a few KB; anything near this size is not the api, and the cap bounds the parse cost
@@ -68,26 +70,18 @@ export function browserTransport(): Transport {
         },
       };
     },
+    onLinkOpen: () => () => {},
   };
 }
 
 export function daemonTransport(client: BridgethingClient): Transport {
-  // the daemon drops every socket with its link, without a close event per socket, so one listener stands in while any is open
+  // the daemon drops every socket with its link, without a close event per socket, so one listener stands in for all of them
   const open = new Set<(reason: string) => void>();
-  let offLink: (() => void) | null = null;
-  const track = (shutdown: (reason: string) => void) => {
-    open.add(shutdown);
-    offLink ??= client.on(e => {
-      if (e.type === 'close') [...open].forEach(s => s('daemon link lost'));
-    });
-  };
-  const untrack = (shutdown: (reason: string) => void) => {
-    open.delete(shutdown);
-    if (open.size === 0) {
-      offLink?.();
-      offLink = null;
-    }
-  };
+  const linkOpen = new Set<() => void>();
+  client.on(e => {
+    if (e.type === 'close') [...open].forEach(s => s('daemon link lost'));
+    if (e.type === 'open') [...linkOpen].forEach(h => h());
+  });
   return {
     async getJson(url) {
       const res = await client.net.fetch(
@@ -108,10 +102,10 @@ export function daemonTransport(client: BridgethingClient): Transport {
         if (closed) return;
         closed = true;
         off();
-        untrack(shutdown);
+        open.delete(shutdown);
         if (reason !== null) handlers.onClose(reason);
       };
-      track(shutdown);
+      open.add(shutdown);
       const off = client.net.subscribePartial({
         wsMessage: m => {
           if (m.connectionId === connectionId && !closed && m.frame.type === 'text') handlers.onText(m.frame.data);
@@ -148,9 +142,13 @@ export function daemonTransport(client: BridgethingClient): Transport {
         close: () => {
           if (closed) return;
           shutdown(null);
-          void client.net.wsClose({ connectionId, code: 1000, reason: 'done' });
+          client.net.wsClose({ connectionId, code: 1000, reason: 'done' }).catch(() => {});
         },
       };
+    },
+    onLinkOpen(handler) {
+      linkOpen.add(handler);
+      return () => linkOpen.delete(handler);
     },
   };
 }

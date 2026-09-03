@@ -18,7 +18,7 @@ describe('alertText', () => {
 
 describe('loadFailedText', () => {
   test('names the reason the first load failed', () => {
-    expect(loadFailedText('rateLimited')).toBe('Too many requests. Try again in a minute.');
+    expect(loadFailedText('rateLimited')).toBe('Too many requests. Try loading stops again in a minute.');
     expect(loadFailedText('failed')).toBe("Couldn't load stops.");
   });
 });

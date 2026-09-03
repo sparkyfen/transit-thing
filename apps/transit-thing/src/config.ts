@@ -38,12 +38,16 @@ export function parseSlots(value: string): Slot[] | null {
   const slots: Slot[] = [];
   for (const r of raw) {
     if (typeof r !== 'object' || r === null) return null;
-    const { stopId, stopName, routeIds } = r as Record<string, unknown>;
-    if (typeof stopId !== 'string' || !ID.test(stopId)) return null;
+    const { stopId: rawStopId, stopName, routeIds: rawRouteIds } = r as Record<string, unknown>;
+    if (typeof rawStopId !== 'string') return null;
+    const stopId = rawStopId.trim();
+    if (!ID.test(stopId)) return null;
     if (typeof stopName !== 'string' || stopName.length === 0 || stopName.length > 80) return null;
-    if (!Array.isArray(routeIds) || routeIds.length === 0 || routeIds.length > MAX_PAIRS) return null;
-    if (!routeIds.every(id => typeof id === 'string' && ID.test(id))) return null;
-    slots.push({ stopId, stopName, routeIds: routeIds as string[] });
+    if (!Array.isArray(rawRouteIds) || rawRouteIds.length === 0 || rawRouteIds.length > MAX_PAIRS) return null;
+    if (!rawRouteIds.every(id => typeof id === 'string')) return null;
+    const routeIds = (rawRouteIds as string[]).map(id => id.trim());
+    if (!routeIds.every(id => ID.test(id))) return null;
+    slots.push({ stopId, stopName, routeIds });
   }
   return slots;
 }

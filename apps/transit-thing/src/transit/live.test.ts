@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ApiError, liveSource, nextDelay, RECONNECT_MAX_MS, RECONNECT_MIN_MS, WATCHDOG_MS } from './live';
+import { ApiError, LINK_WAIT_MS, liveSource, nextDelay, RECONNECT_MAX_MS, RECONNECT_MIN_MS, WATCHDOG_MS } from './live';
 import { LINK_DOWN, MAX_BODY_BYTES, type Socket, type SocketHandlers, type Transport } from './transport';
 
 const slot = { stopId: 'st:1_67652', stopName: 'Bay 9', routeIds: ['st:1_100133'] };
@@ -15,6 +15,7 @@ interface FakeSocket extends Socket {
 function fakeTransport(json: Record<string, { status: number; body: unknown }> = {}) {
   const sockets: FakeSocket[] = [];
   const calls: string[] = [];
+  const linkHandlers = new Set<() => void>();
   const transport: Transport = {
     async getJson(url) {
       calls.push(url);
@@ -27,8 +28,12 @@ function fakeTransport(json: Record<string, { status: number; body: unknown }> =
       sockets.push(s);
       return s;
     },
+    onLinkOpen(handler) {
+      linkHandlers.add(handler);
+      return () => linkHandlers.delete(handler);
+    },
   };
-  return { transport, sockets, calls };
+  return { transport, sockets, calls, linkHandlers, linkOpen: () => [...linkHandlers].forEach(h => h()) };
 }
 
 function fakeTimers() {
@@ -166,10 +171,12 @@ describe('liveSource.subscribe', () => {
     expect(t.pending.map(p => p.ms)).toEqual([WATCHDOG_MS]);
   });
 
-  test('a dial refused for a missing daemon link does not grow the backoff', () => {
-    const { transport, sockets } = fakeTransport();
+  test('a dial refused for a missing daemon link waits for the link and redials at once when it opens', () => {
+    const { transport, sockets, linkHandlers, linkOpen } = fakeTransport();
     const t = fakeTimers();
     const src = liveSource(transport, config, t.timers);
+    const statuses: string[] = [];
+    src.onStatus((_, s) => statuses.push(s));
     src.subscribe(slot, () => {});
     sockets[0]!.handlers.onClose('gone');
     t.fire();
@@ -177,17 +184,37 @@ describe('liveSource.subscribe', () => {
     expect(t.pending[0]!.ms).toBe(RECONNECT_MIN_MS * 2);
     t.fire();
     sockets[2]!.handlers.onClose(LINK_DOWN);
-    expect(t.pending[0]!.ms).toBe(RECONNECT_MIN_MS);
-    t.fire();
+    expect(statuses.at(-1)).toBe('reconnecting');
+    // no timer loop while the phone is away: one link listener and one fallback timer
+    expect(t.pending.map(p => p.ms)).toEqual([LINK_WAIT_MS]);
+    expect(linkHandlers.size).toBe(1);
+    linkOpen();
+    expect(sockets).toHaveLength(4);
+    expect(t.pending).toHaveLength(0);
+    expect(linkHandlers.size).toBe(0);
+    // the fallback timer dials on its own if the open event never comes
     sockets[3]!.handlers.onClose(LINK_DOWN);
-    expect(t.pending[0]!.ms).toBe(RECONNECT_MIN_MS);
+    expect(t.pending.map(p => p.ms)).toEqual([LINK_WAIT_MS]);
     t.fire();
+    expect(sockets).toHaveLength(5);
+    expect(linkHandlers.size).toBe(0);
     // a real failure after the link returns grows from the minimum again
     sockets[4]!.handlers.onClose('refused');
     expect(t.pending[0]!.ms).toBe(RECONNECT_MIN_MS);
     t.fire();
     sockets[5]!.handlers.onClose('refused');
     expect(t.pending[0]!.ms).toBe(RECONNECT_MIN_MS * 2);
+  });
+
+  test('unsubscribing while waiting for the link drops the listener and the fallback timer', () => {
+    const { transport, sockets, linkHandlers } = fakeTransport();
+    const t = fakeTimers();
+    const off = liveSource(transport, config, t.timers).subscribe(slot, () => {});
+    sockets[0]!.handlers.onClose(LINK_DOWN);
+    expect(linkHandlers.size).toBe(1);
+    off();
+    expect(linkHandlers.size).toBe(0);
+    expect(t.pending).toHaveLength(0);
   });
 
   test('a socket silent for too long is closed and redialed', () => {
