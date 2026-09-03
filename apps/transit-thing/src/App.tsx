@@ -10,6 +10,7 @@ import { LOCATE_ROW, reduce, RETRY_ROW, selectOn, type Action, type SelectTarget
 import { FIXTURE_SLOTS, fixtureSource } from './transit/fixtures';
 import { unitsFor } from './transit/format';
 import { locate, type Origin } from './transit/geo';
+import { requestStops } from './transit/loadStops';
 import { dataAsOf } from './transit/status';
 import { forSlot, nextAcrossSlots, slotKey, soonestUpcoming } from './transit/trips';
 import type { Slot, Trip } from './transit/types';
@@ -77,16 +78,10 @@ export default function App() {
     return () => offs.forEach(off => off());
   }, [state.slots]);
 
-  const loadStops = useCallback(async (token: number, origin: Origin | null) => {
-    const reqId = ++reqs.current;
-    dispatch({ type: 'stopsRequested', token, reqId });
-    try {
-      const stops = await fixtureSource.stopsNear(origin);
-      dispatch({ type: 'stops', token, reqId, stops });
-    } catch {
-      dispatch({ type: 'stopsFailed', token, reqId });
-    }
-  }, []);
+  const loadStops = useCallback(
+    (token: number, origin: Origin | null) => requestStops({ dispatch, source: fixtureSource, token, reqId: ++reqs.current, origin }),
+    [],
+  );
 
   const perform = useCallback(
     async (target: SelectTarget) => {
@@ -107,6 +102,7 @@ export default function App() {
         dispatch({ type: 'origin', token, origin: here });
         return loadStops(token, here);
       }
+      dispatch({ type: 'routesRequested', token });
       try {
         const routes = await fixtureSource.routesAt(target.stop.stopId);
         dispatch({ type: 'openRoutes', token, stop: target.stop, routes });
@@ -149,7 +145,7 @@ export default function App() {
   const next = useMemo(() => nextAcrossSlots(feeds, state.slots, nowMs, SOON_MS), [state.slots, feeds, nowMs]);
 
   const { screen } = state;
-  if (screen.kind === 'ambient') return <Ambient nowMs={nowMs} next={next} />;
+  if (screen.kind === 'ambient') return <Ambient nowMs={nowMs} next={next} hasFeed={feeds.size > 0} />;
   if (screen.kind === 'picker') {
     return (
       <StopPicker

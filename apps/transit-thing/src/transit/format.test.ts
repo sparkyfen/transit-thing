@@ -45,14 +45,20 @@ describe('distanceLabel', () => {
     expect(distanceLabel(999, 'metric')).toBe('1.0 km');
     expect(distanceLabel(1500, 'metric')).toBe('1.5 km');
   });
+  test('never reads as zero', () => {
+    expect(distanceLabel(0, 'metric')).toBe('10 m');
+    expect(distanceLabel(4, 'metric')).toBe('10 m');
+    expect(distanceLabel(0, 'us')).toBe('10 ft');
+    expect(distanceLabel(1, 'us')).toBe('10 ft');
+  });
   test('rounds short US distances to ten feet', () => {
     expect(distanceLabel(26, 'us')).toBe('90 ft');
     expect(distanceLabel(150, 'us')).toBe('490 ft');
     expect(distanceLabel(160, 'us')).toBe('520 ft');
+    expect(distanceLabel(300, 'us')).toBe('980 ft');
   });
-  test('switches to miles once the rounded value reaches a tenth of a mile', () => {
-    expect(distanceLabel(161, 'us')).toBe('0.1 mi');
-    expect(distanceLabel(300, 'us')).toBe('0.2 mi');
+  test('switches to miles once the rounded value reaches 1000 ft', () => {
+    expect(distanceLabel(305, 'us')).toBe('0.2 mi');
     expect(distanceLabel(1609, 'us')).toBe('1.0 mi');
     expect(distanceLabel(1931, 'us')).toBe('1.2 mi');
   });

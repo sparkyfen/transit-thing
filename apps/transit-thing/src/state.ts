@@ -22,7 +22,7 @@ export type Screen =
   | { kind: 'board' }
   | { kind: 'ambient' }
   | PickerScreen
-  | { kind: 'routes'; token: number; stops: Stop[]; stop: Stop; routes: Route[]; cursor: number; chosen: string[] };
+  | { kind: 'routes'; token: number; latestReq: number; stops: Stop[]; stop: Stop; routes: Route[]; cursor: number; chosen: string[] };
 
 export interface State {
   slots: Slot[];
@@ -47,6 +47,7 @@ export type Action =
   | { type: 'stops'; token: number; reqId: number; stops: Stop[] }
   | { type: 'stopsFailed'; token: number; reqId: number }
   | { type: 'openRoutes'; token: number; stop: Stop; routes: Route[] }
+  | { type: 'routesRequested'; token: number }
   | { type: 'routesFailed'; token: number }
   | { type: 'locating'; token: number }
   | { type: 'locateFailed'; token: number }
@@ -72,8 +73,8 @@ function pickerRows(screen: PickerScreen): number {
   return stopRow(screen.stops.length);
 }
 
-function freshPicker(token: number): PickerScreen {
-  return { kind: 'picker', token, latestReq: 0, stops: [], cursor: 0, load: 'loading', locate: 'idle', alert: null };
+function freshPicker(token: number, latestReq: number): PickerScreen {
+  return { kind: 'picker', token, latestReq, stops: [], cursor: 0, load: 'loading', locate: 'idle', alert: null };
 }
 
 function clampCursor(screen: PickerScreen): PickerScreen {
@@ -85,8 +86,8 @@ export function pickerMessage(load: LoadStatus, locate: LocateStatus, stopCount:
   if (load === 'loading') return 'Loading stops.';
   if (load === 'failed' || locate === 'locating') return null;
   if (stopCount === 0) return 'No stops found.';
-  const count = stopCount === 1 ? '1 stop' : `${stopCount} stops`;
-  return nearYou ? `${count} found, closest first.` : `${count} found.`;
+  if (stopCount === 1) return '1 stop found.';
+  return nearYou ? `${stopCount} stops found, closest first.` : `${stopCount} stops found.`;
 }
 
 export function selectOn(screen: Screen): SelectTarget | null {
@@ -113,25 +114,35 @@ export function reduce(state: State, action: Action): State {
 function step(state: State, action: Action): State {
   const { screen } = state;
   switch (action.type) {
-    case 'stopsRequested':
+    case 'stopsRequested': {
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;
-      return { ...state, screen: { ...screen, latestReq: action.reqId } };
+      // an empty list goes back to loading so the retry row gives way to the loading message
+      const load = screen.stops.length === 0 ? 'loading' : screen.load;
+      return { ...state, screen: clampCursor({ ...screen, latestReq: action.reqId, load, alert: null }) };
+    }
     case 'stops': {
       if (screen.kind !== 'picker' || screen.token !== action.token || screen.latestReq !== action.reqId) return state;
       const stops = sortByDistance(action.stops, state.origin);
-      const alert = screen.locate === 'failed' ? 'locate' : null;
+      // a fresh list settles only the refresh alert; a failed fix or route load still stands
+      const alert = screen.alert !== 'refresh' ? screen.alert : screen.locate === 'failed' ? 'locate' : null;
       return { ...state, screen: clampCursor({ ...screen, stops, load: 'ready', alert }) };
     }
     case 'stopsFailed':
       if (screen.kind !== 'picker' || screen.token !== action.token || screen.latestReq !== action.reqId) return state;
       if (screen.stops.length > 0) return { ...state, screen: { ...screen, alert: 'refresh' } };
       return { ...state, screen: clampCursor({ ...screen, load: 'failed' }) };
+    case 'routesRequested':
+      if (screen.kind !== 'picker' || screen.token !== action.token) return state;
+      return { ...state, screen: { ...screen, alert: screen.alert === 'routes' ? null : screen.alert } };
     case 'routesFailed':
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;
       return { ...state, screen: { ...screen, alert: 'routes' } };
     case 'openRoutes':
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;
-      return { ...state, screen: { kind: 'routes', token: screen.token, stops: screen.stops, stop: action.stop, routes: action.routes, cursor: 0, chosen: [] } };
+      return {
+        ...state,
+        screen: { kind: 'routes', token: screen.token, latestReq: screen.latestReq, stops: screen.stops, stop: action.stop, routes: action.routes, cursor: 0, chosen: [] },
+      };
     case 'locating':
       if (screen.kind !== 'picker' || screen.token !== action.token || screen.locate === 'locating') return state;
       return { ...state, screen: { ...screen, locate: 'locating', alert: screen.alert === 'locate' ? null : screen.alert } };
@@ -187,7 +198,7 @@ function step(state: State, action: Action): State {
     case 'back':
       if (screen.kind === 'routes') {
         const cursor = stopRow(screen.stops.indexOf(screen.stop));
-        return { ...touched, screen: { ...freshPicker(screen.token), stops: screen.stops, cursor, load: 'ready' } };
+        return { ...touched, screen: { ...freshPicker(screen.token, screen.latestReq), stops: screen.stops, cursor, load: 'ready' } };
       }
       if (screen.kind === 'picker' || screen.kind === 'ambient') return { ...touched, screen: { kind: 'board' } };
       return touched;
@@ -198,6 +209,6 @@ function step(state: State, action: Action): State {
       if (action.at - state.lastInputAt < IDLE_MS) return state;
       return { ...state, screen: { kind: 'ambient' } };
     case 'openPicker':
-      return { ...touched, screen: freshPicker(action.token) };
+      return { ...touched, screen: freshPicker(action.token, 0) };
   }
 }

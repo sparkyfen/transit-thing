@@ -16,6 +16,7 @@ describe('fixtureSource', () => {
     expect(mine.every(t => t.routeId === 'st:40_100239' && t.routeName === '550')).toBe(true);
   });
   test('every trip carries the name and color of its route', async () => {
+    let checked = 0;
     for (const slot of FIXTURE_SLOTS) {
       const routes = await fixtureSource.routesAt(slot.stopId);
       let got: Trip[] = [];
@@ -27,8 +28,10 @@ describe('fixtureSource', () => {
         expect(route).toBeDefined();
         expect(trip.routeName).toBe(route!.name);
         expect(trip.routeColor).toBe(route!.color);
+        checked += 1;
       }
     }
+    expect(checked).toBeGreaterThan(0);
   });
   test('at least one nearby stop has no routes, so the empty routes screen stays reachable', async () => {
     const stops = await fixtureSource.stopsNear(null);

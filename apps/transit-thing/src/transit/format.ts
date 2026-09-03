@@ -20,16 +20,18 @@ export function unitsFor(feed: string): Units {
 
 const FEET_PER_METER = 3.28084;
 const METERS_PER_MILE = 1609.344;
-// feet switch to miles at a tenth of a mile so the scale never reads "990 ft" beside "0.1 mi"
-const MAX_FEET = 528;
+// feet run up to 990 ft so nearby stops stay distinguishable; the first mile value is then 0.2 mi
+const MAX_FEET = 1000;
+// a label never reads as zero: the nearest step is the floor
+const MIN_STEP = 10;
 
 export function distanceLabel(meters: number, units: Units): string {
   if (units === 'us') {
-    const feet = Math.round((meters * FEET_PER_METER) / 10) * 10;
+    const feet = Math.max(MIN_STEP, Math.round((meters * FEET_PER_METER) / 10) * 10);
     if (feet < MAX_FEET) return `${feet} ft`;
     return `${(meters / METERS_PER_MILE).toFixed(1)} mi`;
   }
-  const tens = Math.round(meters / 10) * 10;
+  const tens = Math.max(MIN_STEP, Math.round(meters / 10) * 10);
   if (tens < 1000) return `${tens} m`;
   return `${(meters / 1000).toFixed(1)} km`;
 }

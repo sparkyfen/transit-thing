@@ -80,7 +80,7 @@ export function StopPicker({ stops, cursor, load, locate, alert, origin, units, 
         ) : null}
         {load === 'failed' ? (
           <li>
-            <p className="m-0 px-3 py-2 font-mono text-hint text-warn" role="alert">
+            <p className="m-0 py-2 font-mono text-hint text-warn" role="alert">
               Couldn't load stops.
             </p>
             <button {...rowProps(RETRY_ROW)} className={rowClass(cursor === RETRY_ROW)} onClick={onRetry}>

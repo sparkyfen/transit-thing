@@ -7,9 +7,10 @@ import { RouteBadge } from './RouteBadge';
 interface Props {
   nowMs: number;
   next: NextTrip | null;
+  hasFeed: boolean;
 }
 
-export function Ambient({ nowMs, next }: Props) {
+export function Ambient({ nowMs, next, hasFeed }: Props) {
   const root = useScreenFocus();
   const seconds = Math.floor(nowMs / 1000);
   return (
@@ -26,7 +27,7 @@ export function Ambient({ nowMs, next }: Props) {
           <div className="max-w-full truncate font-mono text-hint text-soft">at {next.slot.stopName}</div>
         </div>
       ) : (
-        <div className="font-mono text-title text-soft">Nothing due soon.</div>
+        <div className="font-mono text-title text-soft">{hasFeed ? 'Nothing due soon.' : 'Waiting for arrivals.'}</div>
       )}
       <div className="absolute bottom-5 font-mono text-hint tracking-[0.25em] text-soft uppercase">Press any button for arrivals</div>
     </main>
