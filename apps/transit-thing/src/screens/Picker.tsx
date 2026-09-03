@@ -1,3 +1,4 @@
+import { MAX_PAIRS } from '../transit/api';
 import { useEffect, useState } from 'react';
 import { LOCATE_ROW, pickerMessage, RETRY_ROW, stopRow, visibleCursor, type FailReason, type LoadStatus, type LocateStatus, type PickerAlert } from '../state';
 import { distanceLabel, rowTitle, type Units } from '../transit/format';
@@ -184,7 +185,7 @@ export function RoutePicker({ stop, routes, cursor, chosen, onToggle, onSave }: 
           </div>
           <div className="flex items-center justify-between gap-6 border-t border-rule px-8 py-3">
             <span id="save-hint" className="font-mono text-hint text-soft">
-              {canSave ? `${chosen.length} of ${routes.length} chosen` : 'Choose at least one route'}
+              {!canSave ? 'Choose at least one route' : chosen.length >= MAX_PAIRS ? `${chosen.length} chosen, the most one stop can follow` : `${chosen.length} of ${routes.length} chosen`}
             </span>
             <button
               {...rowProps(saveRow)}

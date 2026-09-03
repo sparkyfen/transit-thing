@@ -108,6 +108,18 @@ export default function App() {
     [client],
   );
 
+  // a write the store refused is tried again when the daemon link next opens
+  const unsaved = useRef<Slot[] | null>(null);
+  const retryPersist = useCallback(() => {
+    const pending = unsaved.current;
+    if (!pending) return;
+    unsaved.current = null;
+    void persistSlots(client.store, pending).then(ok => {
+      if (ok) persisted.current = JSON.stringify(pending);
+      else unsaved.current = pending;
+    });
+  }, [client]);
+
   // the stops the dial added come back from the store once per session; a store call that fails waits for the next open
   const restoreSlots = useCallback(() => {
     if (!PERSIST || persisted.current !== null || restoring.current) return;
@@ -125,9 +137,10 @@ export default function App() {
       setEverOpen(true);
       void loadConfig();
       restoreSlots();
+      retryPersist();
     }
     if (e.type === 'open' || e.type === 'close' || e.type === 'connecting') setConnection(client.connectionState);
-  }), [client, loadConfig, restoreSlots]);
+  }), [client, loadConfig, restoreSlots, retryPersist]);
 
   const device = useMemo(() => deviceSlots(state), [state.slots, state.configKeys]);
   useEffect(() => {
@@ -135,8 +148,10 @@ export default function App() {
     if (persisted.current === null || persisted.current === json) return;
     void persistSlots(client.store, device).then(ok => {
       if (ok) persisted.current = json;
+      else unsaved.current = device;
     });
   }, [client, device]);
+
 
   useEffect(() => client.config.onChanged(c => setConfig(prev => applyConfig(prev, c.key, c.value))), [client]);
 

@@ -76,7 +76,9 @@ describe('liveSource.subscribe', () => {
       JSON.stringify({ event: 'schedule', data: { trips: [{ tripId: 't', stopId: 's', routeId: 'r', arrivalTime: 1, departureTime: 1 }] } }),
     );
     expect(got).toEqual([1]);
-    // the heartbeat already proves the socket is alive, so it reads live before the schedule
+    // a heartbeat before the first schedule must not read as live, one after it does
+    expect(statuses).toEqual(['connecting', 'live']);
+    sockets[0]!.handlers.onText(JSON.stringify({ event: 'heartbeat', data: null }));
     expect(statuses).toEqual(['connecting', 'live', 'live']);
   });
 

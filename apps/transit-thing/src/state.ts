@@ -250,7 +250,8 @@ function step(state: State, action: Action): State {
       const slot: Slot = { stopId: screen.stop.stopId, stopName: screen.stop.name, routeIds: screen.chosen };
       const existing = state.slots.findIndex(s => slotKey(s) === slotKey(slot));
       if (existing >= 0) return { ...touched, index: existing, screen: { kind: 'board' } };
-      if (state.slots.length >= MAX_SLOTS) return touched;
+      // settings slots do not count: the store only holds the stops the dial added
+      if (deviceSlots(state).length >= MAX_SLOTS) return touched;
       const slots = [...state.slots, slot];
       return { ...touched, slots, index: slots.length - 1, screen: { kind: 'board' } };
     }

@@ -78,8 +78,10 @@ export function liveSource(transport: Transport, config: () => LiveConfig, timer
         }, WATCHDOG_MS);
       };
 
+      let fed = false;
       const dial = () => {
         if (stopped) return;
+        fed = false;
         const { baseUrl, perStop } = config();
         socket = transport.open(wsUrl(baseUrl), {
           onOpen: () => {
@@ -92,13 +94,15 @@ export function liveSource(transport: Transport, config: () => LiveConfig, timer
             if (text.length > MAX_FRAME_CHARS) return;
             const msg = parseServerMessage(text);
             if (msg.kind === 'schedule') {
-              // a schedule or heartbeat proves the server kept the subscription; an open alone can still be refused
+              // a schedule proves the server kept the subscription; an open alone can still be refused
               delay = RECONNECT_MIN_MS;
+              fed = true;
               emit(slot, 'live');
               onTrips(msg.trips);
             } else if (msg.kind === 'heartbeat') {
               delay = RECONNECT_MIN_MS;
-              emit(slot, 'live');
+              // the first heartbeat lands about a second before the first schedule, so it must not un-dim old rows
+              if (fed) emit(slot, 'live');
             } else if (msg.kind === 'error') {
               socket?.close();
               lost('server error');
