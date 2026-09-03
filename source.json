@@ -1,6 +1,6 @@
 {
   "name": "Transit Thing",
-  "description": "Transit arrivals board for the Car Thing.",
+  "description": "Next bus, train, and ferry departures for the stops you care about.",
   "homepage": "https://github.com/sparkyfen/transit-thing",
   "icon": null,
   "base_url": "https://sparkyfen.github.io/transit-thing",

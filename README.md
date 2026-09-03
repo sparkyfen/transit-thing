@@ -1,57 +1,60 @@
-# **SOURCE_NAME**
+# Transit Thing
 
-**SOURCE_DESCRIPTION**
+Next bus, train, and ferry departures on a Spotify Car Thing running
+[bridgething](https://bridgething.com). An arrivals board for your desk that
+also works in the car.
 
-Webapps for the Spotify Car Thing running [bridgething](https://bridgething.com).
+| Board | Ambient | Nearby stops |
+| --- | --- | --- |
+| ![Arrivals board](apps/transit-thing/screenshots/1-board.png) | ![Ambient clock](apps/transit-thing/screenshots/2-ambient.png) | ![Stop picker](apps/transit-thing/screenshots/3-picker.png) |
 
-## First run
+## What it does
 
-1. Push this repo to `https://github.com/sparkyfen/transit-thing`.
-2. In **Settings > Pages**, set the source to **Deploy from a branch**, branch `gh-pages`, folder `/ (root)`.
+- Shows the next departures for the stops you save, with a countdown, the
+  scheduled time, and a live marker when the agency sends real-time data.
+- Turn the dial to move between stops. Presets 1 to 4 jump to your first four.
+- Press the dial or tap **Find nearby stops** to pick a stop from the ones
+  around you, then choose which routes to show.
+- Shows a clock when nothing is due, and comes back when something is.
 
-The catalog is published to `https://sparkyfen.github.io/transit-thing/catalog.v1.json`, which can be submitted to <bridgething.com/apps>
+Data comes from a [Transit Tracker API](https://github.com/tjhorner/transit-tracker-api)
+server. The default is TJ Horner's public instance at `tt.horner.tj`, which
+serves 41 agencies across North America and Europe, including all of Puget
+Sound. You can point the app at your own server in its settings.
+
+## Install
+
+1. In the bridgething companion app, open the store and add this source:
+
+   ```
+   https://sparkyfen.github.io/transit-thing/catalog.v1.json
+   ```
+
+2. Install **Transit Thing**.
+3. Open its settings to pick a feed and a server, or pick stops on the device.
+
+The app reads this device's location only when you ask for nearby stops. The
+position stays on the device and is used once to sort the list.
 
 ## Develop
 
 ```sh
-bun run dev            # develop the app against a connected bridgething instance
-bun run dev:device     # show the dev server on the car thing screen
-bun run push           # build and install to the device
-bun run check          # ensure the catalog is valid
+bun install
+bun run dev            # against a Car Thing connected over USB
+bun run dev:device     # the same, shown on the Car Thing screen
+bun run test           # unit tests
+bun run check          # typecheck, build, and validate the catalog
 ```
 
-With more than one app in `apps/` your commands must specify which one: `bun run dev transit-thing`.
+The app lives in `apps/transit-thing`. Pushing to `main` publishes the catalog
+to GitHub Pages.
 
-Screenshot for the store listing:
+## Credits
 
-```sh
-bun run shot transit-thing            # grabs what is on the screen
-bun run shot transit-thing --replace  # overwrite
-```
+- [Transit Tracker](https://transit-tracker.eastsideurbanism.org/) and its API
+  by TJ Horner and Eastside Urbanism.
+- [bridgething](https://bridgething.com) by Joey Eamigh.
 
-## Add another app
+## License
 
-```sh
-bun run new weather                 # a webapp
-bun run new dashboard --extension   # a webapp plus a desktop-side Deno process
-bun run new home --launcher         # a replacement home screen
-bun run new hud --overlay           # a system overlay drawn over every webapp
-```
-
-## Ship
-
-```sh
-bun run bump transit-thing patch -m "Fix the wind direction arrow"
-git commit -am "transit-thing: fix the wind direction arrow" && git push
-```
-
-Pushing to main builds the apps and regenerates the catalog.
-
-## Agent skill
-
-`.claude/skills/bridgething/` holds the `/bridgething` skill.
-
-```sh
-bun run skills           # refresh it from the published create-bridgething
-bun run skills --check   # check whether it is behind
-```
+MIT. See [LICENSE](LICENSE).
