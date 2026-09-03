@@ -32,6 +32,7 @@ function fakeTransport(json: Record<string, { status: number; body: unknown }> =
       linkHandlers.add(handler);
       return () => linkHandlers.delete(handler);
     },
+    dispose() {},
   };
   return { transport, sockets, calls, linkHandlers, linkOpen: () => [...linkHandlers].forEach(h => h()) };
 }
@@ -104,6 +105,22 @@ describe('liveSource.subscribe', () => {
     expect(t.pending[0]!.ms).toBe(RECONNECT_MIN_MS);
   });
 
+  test('a heartbeat resets the backoff, so a quiet stop does not escalate', () => {
+    const { transport, sockets } = fakeTransport();
+    const t = fakeTimers();
+    const src = liveSource(transport, config, t.timers);
+    src.subscribe(slot, () => {});
+    sockets[0]!.handlers.onClose('gone');
+    t.fire();
+    sockets[1]!.handlers.onClose('gone again');
+    expect(t.pending[0]!.ms).toBe(RECONNECT_MIN_MS * 2);
+    t.fire();
+    sockets[2]!.handlers.onOpen();
+    sockets[2]!.handlers.onText(JSON.stringify({ event: 'heartbeat', data: null }));
+    sockets[2]!.handlers.onClose('drop');
+    expect(t.pending[0]!.ms).toBe(RECONNECT_MIN_MS);
+  });
+
   test('the subscribe message goes out again on the new socket after a reconnect', () => {
     const { transport, sockets } = fakeTransport();
     const t = fakeTimers();
@@ -164,11 +181,14 @@ describe('liveSource.subscribe', () => {
     const one = '{"tripId":"t","stopId":"s","routeId":"r","arrivalTime":1}';
     const frame = `{"event":"schedule","data":{"trips":[${`${one},`.repeat(6000)}${one}]}}`;
     expect(frame.length).toBeGreaterThan(MAX_FRAME_CHARS);
+    const armedAtOpen = t.pending[0]!.id;
     sockets[0]!.handlers.onText(frame);
     expect(got).toEqual([]);
     expect(statuses).toEqual(['connecting']);
     expect(sockets[0]!.closed).toBe(false);
+    // the socket is alive, so the watchdog restarts even though the frame was dropped
     expect(t.pending.map(p => p.ms)).toEqual([WATCHDOG_MS]);
+    expect(t.pending[0]!.id).not.toBe(armedAtOpen);
   });
 
   test('a dial refused for a missing daemon link waits for the link and redials at once when it opens', () => {

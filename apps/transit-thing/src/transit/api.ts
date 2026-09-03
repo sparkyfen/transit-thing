@@ -5,9 +5,9 @@ import type { Route, Slot, Stop, Trip } from './types';
 export const MAX_PAIRS = 25;
 const MAX_LIMIT = 20;
 
-// server ids and the ids a user pastes into settings pass the same charset test; a space may sit inside
-// an id but not at either end, and an id of dots only is a path, not an id
-export const ID = /^(?!\.+$)[A-Za-z0-9:_.-](?:[A-Za-z0-9:_. -]{0,62}[A-Za-z0-9:_.-])?$/;
+// server ids and the ids a user pastes into settings pass the same test: any printable character except the
+// pair delimiters, no control characters, no whitespace at either end, and an id of dots only is a path, not an id
+export const ID = /^(?!\.+$)[^\s,;|\p{C}](?:[^,;|\p{C}]{0,126}[^\s,;|\p{C}])?$/u;
 export const MAX_NAME = 80;
 const MAX_STOPS = 200;
 const MAX_ROUTES = 100;
@@ -104,7 +104,8 @@ export function parseServerMessage(text: string): ServerMessage {
   try {
     msg = JSON.parse(text);
   } catch {
-    return { kind: 'error', message: 'not json' };
+    // a plain text keepalive is not a server error, so it must not cost a reconnect
+    return { kind: 'ignore' };
   }
   if (!isRecord(msg)) return { kind: 'ignore' };
   if (msg.event === 'heartbeat') return { kind: 'heartbeat' };

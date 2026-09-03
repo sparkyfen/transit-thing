@@ -14,9 +14,15 @@ export function lateness(trip: Trip, firstSeen: Map<string, number>): Lateness {
   return null;
 }
 
-// remembers the first predicted arrival per trip and forgets trips that left the feed
-export function rememberFirstSeen(prev: Map<string, number>, trips: Trip[]): Map<string, number> {
+// a baseline older than this is for a trip that has come and gone
+const KEEP_S = 3600;
+
+// remembers the first predicted arrival per trip; a trip that drops out of the top of the list for a frame keeps its
+// baseline until its predicted arrival is an hour in the past
+export function rememberFirstSeen(prev: Map<string, number>, trips: Trip[], nowMs: number): Map<string, number> {
   const next = new Map<string, number>();
-  for (const t of trips) next.set(t.tripId, prev.get(t.tripId) ?? t.arrivalTime);
+  const cutoff = nowMs / 1000 - KEEP_S;
+  for (const [id, arrivalTime] of prev) if (arrivalTime >= cutoff) next.set(id, arrivalTime);
+  for (const t of trips) if (!next.has(t.tripId)) next.set(t.tripId, t.arrivalTime);
   return next;
 }

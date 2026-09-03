@@ -1,7 +1,7 @@
 import { useScreenFocus } from '../hooks/useScreenFocus';
 import { clockTime, minutesUntil, rowTitle } from '../transit/format';
 import { lateness } from '../transit/delay';
-import { boardStatus, waitingText, type Connection, type Link } from '../transit/status';
+import { boardFresh, boardStatus, waitingText, type Connection, type Link } from '../transit/status';
 import type { Slot, Trip } from '../transit/types';
 import { Countdown } from './Countdown';
 import { Lateness } from './Lateness';
@@ -39,8 +39,7 @@ export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, now
   }
   const feed = link?.status ?? null;
   const status = boardStatus(connection, updatedMs, link, nowMs);
-  // a feed that is reconnecting is as stale as one with no daemon, so every live signal follows one flag
-  const fresh = connection === 'open' && feed !== 'reconnecting';
+  const fresh = boardFresh(connection, feed);
   const anyLive = fresh && trips.some(t => t.isRealtime);
   return (
     <main ref={root} tabIndex={-1} className="flex h-full w-full flex-col bg-bg text-off-white outline-none">

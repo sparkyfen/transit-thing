@@ -1,4 +1,5 @@
 import { ID, MAX_NAME, MAX_PAIRS } from './transit/api';
+import { slotKey } from './transit/trips';
 import type { Slot } from './transit/types';
 
 export interface Config {
@@ -36,6 +37,7 @@ export function parseSlots(value: string): Slot[] | null {
   }
   if (!Array.isArray(raw) || raw.length > MAX_SLOTS) return null;
   const slots: Slot[] = [];
+  const keys = new Set<string>();
   for (const r of raw) {
     if (typeof r !== 'object' || r === null) return null;
     const { stopId: rawStopId, stopName, routeIds: rawRouteIds } = r as Record<string, unknown>;
@@ -47,7 +49,11 @@ export function parseSlots(value: string): Slot[] | null {
     if (!rawRouteIds.every(id => typeof id === 'string')) return null;
     const routeIds = (rawRouteIds as string[]).map(id => id.trim());
     if (!routeIds.every(id => ID.test(id))) return null;
-    slots.push({ stopId, stopName, routeIds });
+    const slot = { stopId, stopName, routeIds };
+    // the same stop and routes twice would open two sockets for one board entry; the first one wins
+    if (keys.has(slotKey(slot))) continue;
+    keys.add(slotKey(slot));
+    slots.push(slot);
   }
   return slots;
 }

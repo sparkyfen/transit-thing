@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { everySlotHasFeed, forSlot, nextAcrossSlots, slotKey, soonestUpcoming } from './trips';
+import { diffKeys, everySlotHasFeed, forSlot, nextAcrossSlots, slotKey, soonestUpcoming } from './trips';
 import type { Trip } from './types';
 
 const now = Date.UTC(2026, 8, 2, 20, 0, 0);
@@ -68,6 +68,15 @@ describe('everySlotHasFeed', () => {
     expect(everySlotHasFeed(new Map(), [])).toBe(true);
     expect(everySlotHasFeed(new Map([[slotKey(a), { trips: [] }]]), [a, b])).toBe(false);
     expect(everySlotHasFeed(new Map([[slotKey(a), { trips: [] }], [slotKey(b), { trips: [] }]]), [a, b])).toBe(true);
+  });
+});
+
+describe('diffKeys', () => {
+  test('adds the new keys, removes the missing ones, and leaves the rest alone', () => {
+    expect(diffKeys(new Map([['a', 1], ['b', 2]]).keys(), ['b', 'c'])).toEqual({ add: ['c'], remove: ['a'] });
+    expect(diffKeys(['a'], ['a'])).toEqual({ add: [], remove: [] });
+    expect(diffKeys([], ['a', 'a'])).toEqual({ add: ['a'], remove: [] });
+    expect(diffKeys(['a', 'b'], [])).toEqual({ add: [], remove: ['a', 'b'] });
   });
 });
 

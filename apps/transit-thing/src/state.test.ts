@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { IDLE_MS, LOCATE_ROW, pickerMessage, reduce, selectOn, visibleCursor, type State } from './state';
+import { deviceSlots, IDLE_MS, LOCATE_ROW, pickerMessage, reduce, selectOn, visibleCursor, type State } from './state';
 import type { Route, Stop } from './transit/types';
 
 const slot = (n: number) => ({ stopId: `s${n}`, stopName: `Stop ${n}`, routeIds: [`r${n}`] });
@@ -463,6 +463,37 @@ describe('slots from settings', () => {
     expect(s).not.toBe(base);
     expect(s.slots).toEqual(base.slots);
     expect(reduce(s, { type: 'slots', slots: [slot(2)] }).slots).toEqual([slot(2)]);
+  });
+});
+
+describe('remembered stops', () => {
+  test('deviceSlots leaves out the stops settings name', () => {
+    expect(deviceSlots(base)).toEqual(base.slots);
+    const s = reduce(base, { type: 'slots', slots: [slot(2), slot(9)] });
+    expect(deviceSlots(s)).toEqual([slot(1), slot(3)]);
+    expect(deviceSlots({ slots: [], configKeys: [] })).toEqual([]);
+  });
+  test('restore appends the stops the board does not have and keeps the index', () => {
+    const s = reduce({ ...base, index: 2 }, { type: 'restore', slots: [slot(2), slot(7), slot(8)] });
+    expect(s.slots).toEqual([slot(1), slot(2), slot(3), slot(7), slot(8)]);
+    expect(s.index).toBe(2);
+    expect(s.configKeys).toEqual([]);
+  });
+  test('restore with nothing new is a no-op', () => {
+    expect(reduce(base, { type: 'restore', slots: [slot(1)] })).toBe(base);
+    expect(reduce(base, { type: 'restore', slots: [] })).toBe(base);
+  });
+  test('a restored stop counts as dial-added, so a settings edit leaves it alone', () => {
+    let s = reduce({ ...base, slots: [] }, { type: 'slots', slots: [slot(9)] });
+    s = reduce(s, { type: 'restore', slots: [slot(7)] });
+    expect(deviceSlots(s)).toEqual([slot(7)]);
+    s = reduce(s, { type: 'slots', slots: [slot(8)] });
+    expect(s.slots).toEqual([slot(8), slot(7)]);
+    expect(deviceSlots(s)).toEqual([slot(7)]);
+  });
+  test('a restored stop that settings already name is not doubled', () => {
+    const s = reduce({ ...base, slots: [] }, { type: 'slots', slots: [slot(9)] });
+    expect(reduce(s, { type: 'restore', slots: [slot(9)] })).toBe(s);
   });
 });
 

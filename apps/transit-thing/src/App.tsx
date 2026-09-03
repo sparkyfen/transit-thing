@@ -4,10 +4,11 @@ import { applyConfig, DEFAULT_CONFIG, type Config } from './config';
 import { daemonUrl } from './daemon';
 import { DIRECT, FAKE_FIX, SEED_SLOTS, USE_FIXTURES } from './devFlags';
 import { useControls } from './hooks/useControls';
+import { loadSlots, persistSlots } from './persist';
 import { Ambient } from './screens/Ambient';
 import { Board } from './screens/Board';
 import { RoutePicker, StopPicker } from './screens/Picker';
-import { LOCATE_ROW, reduce, RETRY_ROW, selectOn, type Action, type SelectTarget, type State } from './state';
+import { deviceSlots, LOCATE_ROW, reduce, RETRY_ROW, selectOn, type Action, type SelectTarget, type State } from './state';
 import { rememberFirstSeen } from './transit/delay';
 import { FIXTURE_SLOTS, fixtureSource } from './transit/fixtures';
 import { liveSource, type LiveSource } from './transit/live';
@@ -16,15 +17,23 @@ import { locate, type Origin } from './transit/geo';
 import { requestRoutes, requestStops } from './transit/requests';
 import { dataAsOf, nextLink, type Link } from './transit/status';
 import { browserTransport, daemonTransport } from './transit/transport';
-import { everySlotHasFeed, forSlot, nextAcrossSlots, slotKey, soonestUpcoming } from './transit/trips';
+import { diffKeys, everySlotHasFeed, forSlot, nextAcrossSlots, slotKey, soonestUpcoming } from './transit/trips';
 import type { Slot, Trip } from './transit/types';
 
 const SOON_MS = 20 * 60_000;
+// canned or seeded stops are for a dev session and must not land in the device's store, nor pull its stops in
+const PERSIST = !USE_FIXTURES && SEED_SLOTS === null;
 
 interface Feed {
   trips: Trip[];
   updatedMs: number;
   firstSeen: Map<string, number>;
+}
+
+function without<V>(map: Map<string, V>, keys: string[]): Map<string, V> {
+  const next = new Map(map);
+  for (const key of keys) next.delete(key);
+  return next;
 }
 
 const initial: State = {
@@ -51,24 +60,32 @@ export default function App() {
   const configRef = useRef(config);
   configRef.current = config;
   const [links, setLinks] = useState<Map<string, Link>>(() => new Map());
+  // the last list written to the store, so the same list is not written twice; null until the store has been read
+  const persisted = useRef<string | null>(null);
+  const restoring = useRef(false);
 
-  const source = useMemo<LiveSource>(() => {
-    if (USE_FIXTURES) return fixtureSource;
-    return liveSource(DIRECT ? browserTransport() : daemonTransport(client), () => ({
-      baseUrl: configRef.current.apiBaseUrl,
-      feed: configRef.current.feed,
-      perStop: configRef.current.perStop,
-    }));
+  // the transport owns a daemon listener, so it lives and dies with an effect rather than a memo
+  const [source, setSource] = useState<LiveSource | null>(USE_FIXTURES ? fixtureSource : null);
+  useEffect(() => {
+    if (USE_FIXTURES) return;
+    const transport = DIRECT ? browserTransport() : daemonTransport(client);
+    setSource(
+      liveSource(transport, () => ({
+        baseUrl: configRef.current.apiBaseUrl,
+        feed: configRef.current.feed,
+        perStop: configRef.current.perStop,
+      })),
+    );
+    return () => transport.dispose();
   }, [client]);
 
-  useEffect(
-    () =>
-      source.onStatus((slot, status) => {
-        const key = slotKey(slot);
-        setLinks(prev => new Map(prev).set(key, nextLink(prev.get(key), status, Date.now())));
-      }),
-    [source],
-  );
+  useEffect(() => {
+    if (!source) return;
+    return source.onStatus((slot, status) => {
+      const key = slotKey(slot);
+      setLinks(prev => new Map(prev).set(key, nextLink(prev.get(key), status, Date.now())));
+    });
+  }, [source]);
 
   useEffect(() => {
     const tick = setInterval(() => {
@@ -91,36 +108,84 @@ export default function App() {
     [client],
   );
 
+  // the stops the dial added come back from the store once per session; a store call that fails waits for the next open
+  const restoreSlots = useCallback(() => {
+    if (!PERSIST || persisted.current !== null || restoring.current) return;
+    restoring.current = true;
+    void loadSlots(client.store).then(slots => {
+      restoring.current = false;
+      if (!slots) return;
+      persisted.current = JSON.stringify(slots);
+      dispatch({ type: 'restore', slots });
+    });
+  }, [client]);
+
   useEffect(() => client.on(e => {
     if (e.type === 'open') {
       setEverOpen(true);
       void loadConfig();
+      restoreSlots();
     }
     if (e.type === 'open' || e.type === 'close' || e.type === 'connecting') setConnection(client.connectionState);
-  }), [client, loadConfig]);
+  }), [client, loadConfig, restoreSlots]);
+
+  const device = useMemo(() => deviceSlots(state), [state.slots, state.configKeys]);
+  useEffect(() => {
+    const json = JSON.stringify(device);
+    if (persisted.current === null || persisted.current === json) return;
+    persisted.current = json;
+    void persistSlots(client.store, device);
+  }, [client, device]);
 
   useEffect(() => client.config.onChanged(c => setConfig(prev => applyConfig(prev, c.key, c.value))), [client]);
 
   useEffect(() => dispatch({ type: 'slots', slots: config.slots ?? [] }), [config.slots]);
 
+  // one subscription per slot key; a slot change touches only its own socket, and every socket redials when the
+  // server or the limit changes (this cleanup runs before the effect below on the same commit)
+  const subs = useRef(new Map<string, () => void>());
+  useEffect(
+    () => () => {
+      subs.current.forEach(off => off());
+      subs.current.clear();
+    },
+    [source, config.apiBaseUrl, config.perStop],
+  );
+
   useEffect(() => {
-    const offs = state.slots.map(slot =>
-      source.subscribe(slot, trips => {
-        const key = slotKey(slot);
-        const mine = forSlot(slot, trips);
-        setFeeds(prev => new Map(prev).set(key, { trips: mine, updatedMs: Date.now(), firstSeen: rememberFirstSeen(prev.get(key)?.firstSeen ?? new Map(), mine) }));
-      }),
-    );
-    return () => offs.forEach(off => off());
+    if (!source) return;
+    const { add, remove } = diffKeys(subs.current.keys(), state.slots.map(slotKey));
+    for (const key of remove) {
+      subs.current.get(key)?.();
+      subs.current.delete(key);
+    }
+    if (remove.length > 0) {
+      // a slot added back later starts from its first schedule, not from what it showed before
+      setFeeds(prev => without(prev, remove));
+      setLinks(prev => without(prev, remove));
+    }
+    for (const slot of state.slots) {
+      const key = slotKey(slot);
+      if (!add.includes(key) || subs.current.has(key)) continue;
+      subs.current.set(
+        key,
+        source.subscribe(slot, trips => {
+          const at = Date.now();
+          const mine = forSlot(slot, trips);
+          setFeeds(prev => new Map(prev).set(key, { trips: mine, updatedMs: at, firstSeen: rememberFirstSeen(prev.get(key)?.firstSeen ?? new Map(), mine, at) }));
+        }),
+      );
+    }
   }, [source, state.slots, config.apiBaseUrl, config.perStop]);
 
   const loadStops = useCallback(
-    (token: number, origin: Origin | null) => requestStops({ dispatch, source, token, reqId: ++reqs.current, origin }),
+    (token: number, origin: Origin | null) => (source ? requestStops({ dispatch, source, token, reqId: ++reqs.current, origin }) : undefined),
     [source],
   );
 
   const perform = useCallback(
     async (target: SelectTarget) => {
+      if (!source) return;
       if (target.kind === 'openPicker') {
         const token = ++tokens.current;
         dispatch({ type: 'openPicker', token, at: Date.now() });

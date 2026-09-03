@@ -92,13 +92,16 @@ describe('parseServerMessage', () => {
   });
   test('ids pass the same charset test as the ids from settings', () => {
     expect(parseTrip({ ...trip, tripId: 'a\tb' })).toBeNull();
-    expect(parseTrip({ ...trip, stopId: '<script>' })).toBeNull();
+    expect(parseTrip({ ...trip, stopId: 'a\u0000b' })).toBeNull();
     expect(parseTrip({ ...trip, routeId: 'nymtabus:MTA NYCT_M42' })?.routeId).toBe('nymtabus:MTA NYCT_M42');
-    expect(parseTrip({ ...trip, routeId: 'r'.repeat(65) })).toBeNull();
+    expect(parseTrip({ ...trip, routeId: 'r'.repeat(128) })).not.toBeNull();
+    expect(parseTrip({ ...trip, routeId: 'r'.repeat(129) })).toBeNull();
     expect(parseTrip({ ...trip, tripId: 'st:1_ABC.x-y' })).not.toBeNull();
+    expect(parseTrip({ ...trip, tripId: 'a/b+c#1' })?.tripId).toBe('a/b+c#1');
+    expect(parseTrip({ ...trip, tripId: 'ñ' })?.tripId).toBe('ñ');
   });
   test('ids reject the pair delimiters, a space at either end, and dots only', () => {
-    for (const bad of ['a,b', 'a;b', ' a', 'a ', '.', '..', ' ']) {
+    for (const bad of ['a,b', 'a;b', 'a|b', ' a', 'a ', '.', '..', ' ', '']) {
       expect(parseTrip({ ...trip, routeId: bad })).toBeNull();
       expect(parseTrip({ ...trip, stopId: bad })).toBeNull();
       expect(parseTrip({ ...trip, tripId: bad })).toBeNull();
@@ -113,7 +116,12 @@ describe('parseServerMessage', () => {
     expect(parseServerMessage(JSON.stringify({ event: 'error', data: { message: 'Too many route-stop pairs' } }))).toEqual({ kind: 'error', message: 'Too many route-stop pairs' });
     expect(parseServerMessage(JSON.stringify({ event: 'exception', data: { status: 'error', message: 'Bad Request' } }))).toEqual({ kind: 'error', message: 'Bad Request' });
     expect(parseServerMessage(JSON.stringify({ event: 'exception' }))).toEqual({ kind: 'error', message: 'server error' });
-    expect(parseServerMessage('not json').kind).toBe('error');
+    expect(parseServerMessage(JSON.stringify({ event: 'other' })).kind).toBe('ignore');
+  });
+  test('text that is not json is ignored, not an error', () => {
+    expect(parseServerMessage('not json').kind).toBe('ignore');
+    expect(parseServerMessage('ping').kind).toBe('ignore');
+    expect(parseServerMessage('"a string"').kind).toBe('ignore');
     expect(parseServerMessage(JSON.stringify({ event: 'other' })).kind).toBe('ignore');
   });
   test('names are cut to 80 characters and a schedule stops at 50 trips', () => {
@@ -146,22 +154,28 @@ describe('parseStops and parseRoutes', () => {
   });
   test('drop ids outside the id charset and cut names to 80 characters', () => {
     const long = 'x'.repeat(100);
-    expect(parseStops([{ stopId: 'a/b', lat: 1, lon: 2 }, { stopId: 'a'.repeat(65), lat: 1, lon: 2 }, { stopId: 'ok', name: long, stopCode: long, lat: 1, lon: 2 }])).toEqual([
+    expect(parseStops([{ stopId: 'a\tb', lat: 1, lon: 2 }, { stopId: 'a'.repeat(129), lat: 1, lon: 2 }, { stopId: 'ok', name: long, stopCode: long, lat: 1, lon: 2 }])).toEqual([
       { stopId: 'ok', stopCode: 'x'.repeat(80), name: 'x'.repeat(80), lat: 1, lon: 2 },
     ]);
-    expect(parseRoutes([{ routeId: '<r>' }, { routeId: 'r', name: long, headsigns: [long] }])).toEqual([{ routeId: 'r', name: 'x'.repeat(80), color: null, headsigns: ['x'.repeat(80)] }]);
+    expect(parseRoutes([{ routeId: 'r\u0007' }, { routeId: 'r', name: long, headsigns: [long] }])).toEqual([{ routeId: 'r', name: 'x'.repeat(80), color: null, headsigns: ['x'.repeat(80)] }]);
   });
-  test('a 64-character id is accepted', () => {
-    const id = 'a'.repeat(64);
+  test('a 128-character id is accepted and 129 is not', () => {
+    const id = 'a'.repeat(128);
     expect(parseStops([{ stopId: id, lat: 1, lon: 2 }])).toHaveLength(1);
     expect(parseRoutes([{ routeId: id }])).toHaveLength(1);
+    expect(parseStops([{ stopId: `${id}a`, lat: 1, lon: 2 }])).toEqual([]);
+    expect(parseRoutes([{ routeId: `${id}a` }])).toEqual([]);
+  });
+  test('punctuation and non-ascii letters from real gtfs ids pass', () => {
+    expect(parseStops([{ stopId: 'a/b+c#1', lat: 1, lon: 2 }, { stopId: 'ñ', lat: 1, lon: 2 }]).map(s => s.stopId)).toEqual(['a/b+c#1', 'ñ']);
+    expect(parseRoutes([{ routeId: 'a/b+c#1' }, { routeId: 'ñ' }]).map(r => r.routeId)).toEqual(['a/b+c#1', 'ñ']);
   });
   test('an id may hold a space, as the MTA feeds do', () => {
     expect(parseRoutes([{ routeId: 'nymtabus:MTA NYCT_M42' }])).toEqual([{ routeId: 'nymtabus:MTA NYCT_M42', name: 'nymtabus:MTA NYCT_M42', color: null, headsigns: [] }]);
     expect(parseStops([{ stopId: 'nymtabus:MTA NYCT_M42', lat: 1, lon: 2 }])).toHaveLength(1);
   });
   test('drop ids with a delimiter, a space at either end, or dots only', () => {
-    for (const bad of ['a,b', 'a;b', 'a ', ' a', '.', '..']) {
+    for (const bad of ['a,b', 'a;b', 'a|b', 'a ', ' a', '.', '..']) {
       expect(parseStops([{ stopId: bad, lat: 1, lon: 2 }])).toEqual([]);
       expect(parseRoutes([{ routeId: bad }])).toEqual([]);
     }

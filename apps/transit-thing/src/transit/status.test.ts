@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { clockTime } from './format';
-import { boardStatus, dataAsOf, nextLink, RECOVERED_MS, waitingText, type Link } from './status';
+import { boardFresh, boardStatus, dataAsOf, nextLink, RECOVERED_MS, waitingText, type Link } from './status';
 
 const link = (status: Link['status'], recoveredAt: number | null = null): Link => ({ status, recoveredAt });
 
@@ -61,6 +61,18 @@ describe('nextLink', () => {
     expect(nextLink(link('connecting'), 'live', 2)).toEqual({ status: 'live', recoveredAt: null });
     expect(nextLink(link('reconnecting'), 'live', 3)).toEqual({ status: 'live', recoveredAt: 3 });
     expect(nextLink(link('live', 3), 'live', 4)).toEqual({ status: 'live', recoveredAt: 3 });
+  });
+});
+
+describe('boardFresh', () => {
+  test('only a live feed over an open daemon link is fresh', () => {
+    expect(boardFresh('open', 'live')).toBe(true);
+    // a slot that is dialing after a resubscribe still holds its old trips; they are not fresh until a schedule lands
+    expect(boardFresh('open', 'connecting')).toBe(false);
+    expect(boardFresh('open', 'reconnecting')).toBe(false);
+    expect(boardFresh('open', null)).toBe(false);
+    expect(boardFresh('closed', 'live')).toBe(false);
+    expect(boardFresh('connecting', 'live')).toBe(false);
   });
 });
 

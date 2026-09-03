@@ -6,6 +6,13 @@ export function slotKey(slot: Slot): string {
   return `${slot.stopId}|${[...slot.routeIds].sort().join(',')}`;
 }
 
+// which subscriptions to open and close so a slot change touches only its own socket
+export function diffKeys(have: Iterable<string>, want: string[]): { add: string[]; remove: string[] } {
+  const current = new Set(have);
+  const wanted = new Set(want);
+  return { add: [...wanted].filter(k => !current.has(k)), remove: [...current].filter(k => !wanted.has(k)) };
+}
+
 export function forSlot(slot: Slot, trips: Trip[]): Trip[] {
   return trips.filter(t => slot.routeIds.includes(t.routeId));
 }

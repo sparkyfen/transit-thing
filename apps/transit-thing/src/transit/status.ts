@@ -36,6 +36,11 @@ export function boardStatus(connection: Connection, updatedMs: number | null, li
   return { text: `Offline, as of ${clockTime(Math.floor(updatedMs / 1000))}`, tone: 'warn' };
 }
 
+// a feed that is dialing or reconnecting is as stale as one with no daemon, so every live signal follows one flag
+export function boardFresh(connection: Connection, feed: FeedLink): boolean {
+  return connection === 'open' && feed === 'live';
+}
+
 export function waitingText(connection: Connection, feed: FeedLink): string {
   if (connection !== 'open') return 'Waiting for arrivals.';
   if (feed === 'reconnecting') return 'Reconnecting to the transit server.';

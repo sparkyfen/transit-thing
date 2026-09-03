@@ -87,16 +87,17 @@ export function liveSource(transport: Transport, config: () => LiveConfig, timer
             socket?.send(subscribeMessage(slot, perStop));
           },
           onText: text => {
+            // a frame too big to parse still came from a living socket
+            arm();
             if (text.length > MAX_FRAME_CHARS) return;
             const msg = parseServerMessage(text);
             if (msg.kind === 'schedule') {
-              arm();
-              // a schedule proves the server accepted the subscription; an open alone can still be refused
+              // a schedule or heartbeat proves the server kept the subscription; an open alone can still be refused
               delay = RECONNECT_MIN_MS;
               emit(slot, 'live');
               onTrips(msg.trips);
             } else if (msg.kind === 'heartbeat') {
-              arm();
+              delay = RECONNECT_MIN_MS;
             } else if (msg.kind === 'error') {
               socket?.close();
               lost('server error');

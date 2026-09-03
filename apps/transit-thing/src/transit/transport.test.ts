@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { BridgethingClient } from '@bridgething/client';
-import { browserTransport, daemonTransport, jsonOrNull, MAX_BODY_BYTES, type SocketHandlers } from './transport';
+import { browserTransport, daemonTransport, jsonOrNull, LINK_DOWN, MAX_BODY_BYTES, uuid, type SocketHandlers } from './transport';
 
 type Listener<T> = (msg: T) => void;
 interface WsClosed {
@@ -182,6 +182,29 @@ describe('daemonTransport sockets', () => {
     expect(opens).toBe(1);
   });
 
+  test('dispose drops the link listener and closes every open socket without a close event', async () => {
+    const fake = fakeClient();
+    const transport = daemonTransport(fake.client);
+    const a = recorder();
+    const b = recorder();
+    const c = recorder();
+    transport.open('wss://tt.horner.tj/', a.handlers);
+    transport.open('wss://tt.horner.tj/', b.handlers);
+    const third = transport.open('wss://tt.horner.tj/', c.handlers);
+    await tick();
+    third.close();
+    let opens = 0;
+    transport.onLinkOpen(() => opens++);
+    transport.dispose();
+    expect(fake.linkListeners()).toBe(0);
+    expect(fake.listeners()).toBe(0);
+    expect(fake.closed).toEqual([fake.opened[2], fake.opened[0], fake.opened[1]]);
+    expect(a.events).toEqual(['open']);
+    expect(b.events).toEqual(['open']);
+    fake.link('open');
+    expect(opens).toBe(0);
+  });
+
   test('a close from the daemon runs every unsubscribe and later events are ignored', async () => {
     const fake = fakeClient();
     const { events, handlers } = recorder();
@@ -277,6 +300,28 @@ describe('daemonTransport.getJson', () => {
   test('a daemon error rejects', async () => {
     const fake = fakeClient({ fetch: 'fail' });
     await expect(daemonTransport(fake.client).getJson('https://tt.horner.tj/stops')).rejects.toThrow('net timeout');
+  });
+  test('a daemon link that is not open rejects at once without a request', async () => {
+    const fake = fakeClient({ fetch: { status: 200, body: encode('[]') }, link: 'connecting' });
+    await expect(daemonTransport(fake.client).getJson('https://tt.horner.tj/stops')).rejects.toThrow(LINK_DOWN);
+    expect(fake.fetched).toEqual([]);
+  });
+});
+
+describe('uuid', () => {
+  const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  test('is canonical with or without crypto.randomUUID', () => {
+    expect(uuid()).toMatch(V4);
+    const real = crypto.randomUUID;
+    Object.defineProperty(crypto, 'randomUUID', { value: undefined, configurable: true, writable: true });
+    try {
+      const ids = Array.from({ length: 50 }, uuid);
+      for (const id of ids) expect(id).toMatch(V4);
+      expect(new Set(ids).size).toBe(50);
+    } finally {
+      Object.defineProperty(crypto, 'randomUUID', { value: real, configurable: true, writable: true });
+    }
+    expect(uuid()).toMatch(V4);
   });
 });
 

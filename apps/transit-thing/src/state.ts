@@ -57,7 +57,8 @@ export type Action =
   | { type: 'locating'; token: number }
   | { type: 'locateFailed'; token: number }
   | { type: 'origin'; token: number; origin: Origin }
-  | { type: 'slots'; slots: Slot[] };
+  | { type: 'slots'; slots: Slot[] }
+  | { type: 'restore'; slots: Slot[] };
 
 // what a dial press means on the screens whose select needs a side effect
 export type SelectTarget = { kind: 'openPicker' } | { kind: 'locate' } | { kind: 'retry' } | { kind: 'pickStop'; stop: Stop };
@@ -121,6 +122,11 @@ function sameKeys(a: string[], b: string[]): boolean {
 // a settings edit that only renames a stop keeps its key, so the name is checked beside it
 function sameSlots(a: Slot[], b: Slot[]): boolean {
   return sameKeys(a.map(slotKey), b.map(slotKey)) && sameKeys(a.map(s => s.stopName), b.map(s => s.stopName));
+}
+
+// the slots the dial added, which settings do not name; these are what the device remembers across restarts
+export function deviceSlots(state: Pick<State, 'slots' | 'configKeys'>): Slot[] {
+  return state.slots.filter(s => !state.configKeys.includes(slotKey(s)));
 }
 
 export function sortByDistance(stops: Stop[], origin: Origin | null): Stop[] {
@@ -191,6 +197,12 @@ function step(state: State, action: Action): State {
       const kept = current === undefined ? -1 : slots.findIndex(s => slotKey(s) === current);
       const index = kept >= 0 ? kept : Math.min(state.index, Math.max(0, slots.length - 1));
       return { ...state, slots, configKeys, index };
+    }
+    case 'restore': {
+      // remembered stops land after everything on the board, so settings and stops added before the load stay put
+      const keys = state.slots.map(slotKey);
+      const added = action.slots.filter(s => !keys.includes(slotKey(s)));
+      return added.length === 0 ? state : { ...state, slots: [...state.slots, ...added] };
     }
     case 'origin':
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;

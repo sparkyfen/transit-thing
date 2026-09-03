@@ -112,9 +112,13 @@ function tripsFor(slot: Slot, nowMs: number): Trip[] {
   });
 }
 
+const statusHandlers = new Set<Parameters<LiveSource['onStatus']>[0]>();
+
 export const fixtureSource: LiveSource = {
   subscribe(slot, onTrips) {
     onTrips(tripsFor(slot, Date.now()));
+    // canned data is as live as it gets; without this the board would dim it as a feed that never connected
+    statusHandlers.forEach(h => h(slot, 'live'));
     return () => {};
   },
   async stopsNear() {
@@ -123,7 +127,8 @@ export const fixtureSource: LiveSource = {
   async routesAt(stopId) {
     return ROUTES.get(stopId) ?? [];
   },
-  onStatus() {
-    return () => {};
+  onStatus(handler) {
+    statusHandlers.add(handler);
+    return () => statusHandlers.delete(handler);
   },
 };

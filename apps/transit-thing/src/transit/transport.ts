@@ -17,6 +17,8 @@ export interface Transport {
   open(url: string, handlers: SocketHandlers): Socket;
   // fires when the daemon link comes back, so a caller refused with LINK_DOWN can redial without polling
   onLinkOpen(handler: () => void): () => void;
+  // drops the daemon listener and shuts every open socket; the transport is done after this
+  dispose(): void;
 }
 
 // a stops reply for a full box is a few KB; anything near this size is not the api, and the cap bounds the parse cost
@@ -26,6 +28,17 @@ export const LINK_DOWN = 'daemon link down';
 // the request budget is 45 s, and the client rpc has to outlive it to see the reply
 const REQUEST_TIMEOUT_MS = 45_000;
 const RPC_TIMEOUT_MS = 50_000;
+
+// crypto.randomUUID exists only in a secure context, and the dev server on a lan address is not one; the id has
+// to stay canonical because the client only packs it as bytes when it looks like a uuid
+export function uuid(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6]! & 0x0f) | 0x40;
+  b[8] = (b[8]! & 0x3f) | 0x80;
+  const hex = [...b].map(n => n.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 export function jsonOrNull(text: string): unknown {
   try {
@@ -71,19 +84,22 @@ export function browserTransport(): Transport {
       };
     },
     onLinkOpen: () => () => {},
+    dispose: () => {},
   };
 }
 
 export function daemonTransport(client: BridgethingClient): Transport {
   // the daemon drops every socket with its link, without a close event per socket, so one listener stands in for all of them
-  const open = new Set<(reason: string) => void>();
+  const open = new Set<{ lost(reason: string): void; close(): void }>();
   const linkOpen = new Set<() => void>();
-  client.on(e => {
-    if (e.type === 'close') [...open].forEach(s => s('daemon link lost'));
+  const offLink = client.on(e => {
+    if (e.type === 'close') [...open].forEach(s => s.lost('daemon link lost'));
     if (e.type === 'open') [...linkOpen].forEach(h => h());
   });
   return {
     async getJson(url) {
+      // with no link the rpc would only wait out its timeout; failing now shows the failed state at once
+      if (client.connectionState !== 'open') throw new Error(LINK_DOWN);
       const res = await client.net.fetch(
         {
           request: { url, method: 'GET', headers: [{ name: 'accept', value: 'application/json' }], body: null, timeoutMs: REQUEST_TIMEOUT_MS, redirect: 'manual' },
@@ -92,20 +108,26 @@ export function daemonTransport(client: BridgethingClient): Transport {
       );
       if (!res.ok) throw new Error(res.kind === 'domain' ? `net ${res.error.error.type}` : 'daemon request failed');
       const { status, body } = res.response.response;
-      return { status, body: bodyJson(new Uint8Array(body as unknown as number[])) };
+      return { status, body: bodyJson(body) };
     },
     open(url, handlers) {
-      const connectionId = crypto.randomUUID();
+      const connectionId = uuid();
       let closed = false;
       // stops every listener; the handler runs only for a close the server or daemon started
       const shutdown = (reason: string | null) => {
         if (closed) return;
         closed = true;
         off();
-        open.delete(shutdown);
+        open.delete(entry);
         if (reason !== null) handlers.onClose(reason);
       };
-      open.add(shutdown);
+      const close = () => {
+        if (closed) return;
+        shutdown(null);
+        client.net.wsClose({ connectionId, code: 1000, reason: 'done' }).catch(() => {});
+      };
+      const entry = { lost: shutdown, close };
+      open.add(entry);
       const off = client.net.subscribePartial({
         wsMessage: m => {
           if (m.connectionId === connectionId && !closed && m.frame.type === 'text') handlers.onText(m.frame.data);
@@ -139,16 +161,17 @@ export function daemonTransport(client: BridgethingClient): Transport {
         send: text => {
           if (!closed) client.net.wsSend({ connectionId, frame: { type: 'text', data: text } }).catch(() => {});
         },
-        close: () => {
-          if (closed) return;
-          shutdown(null);
-          client.net.wsClose({ connectionId, code: 1000, reason: 'done' }).catch(() => {});
-        },
+        close,
       };
     },
     onLinkOpen(handler) {
       linkOpen.add(handler);
       return () => linkOpen.delete(handler);
+    },
+    dispose() {
+      offLink();
+      linkOpen.clear();
+      [...open].forEach(s => s.close());
     },
   };
 }
