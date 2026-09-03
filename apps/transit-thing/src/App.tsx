@@ -6,14 +6,14 @@ import { useControls } from './hooks/useControls';
 import { Ambient } from './screens/Ambient';
 import { Board } from './screens/Board';
 import { RoutePicker, StopPicker } from './screens/Picker';
-import { LOCATE_ROW, reduce, RETRY_ROW, selectOn, type Action, type SelectTarget, type State } from './state';
+import { LOCATE_ROW, reduce, RETRY_ROW, sameSlots, selectOn, type Action, type SelectTarget, type State } from './state';
 import { rememberFirstSeen } from './transit/delay';
 import { FIXTURE_SLOTS, fixtureSource } from './transit/fixtures';
-import { liveSource, type FeedStatus } from './transit/live';
+import { liveSource, type LiveSource } from './transit/live';
 import { unitsFor } from './transit/format';
 import { locate, type Origin } from './transit/geo';
 import { requestRoutes, requestStops } from './transit/requests';
-import { dataAsOf } from './transit/status';
+import { dataAsOf, nextLink, type Link } from './transit/status';
 import { browserTransport, daemonTransport } from './transit/transport';
 import { everySlotHasFeed, forSlot, nextAcrossSlots, slotKey, soonestUpcoming } from './transit/trips';
 import type { Slot, TransitSource, Trip } from './transit/types';
@@ -60,18 +60,24 @@ export default function App() {
   const [config, setConfig] = useState<Config>(DEFAULT_CONFIG);
   const configRef = useRef(config);
   configRef.current = config;
-  const [links, setLinks] = useState<Map<string, FeedStatus>>(() => new Map());
+  const [links, setLinks] = useState<Map<string, Link>>(() => new Map());
 
-  const source = useMemo<TransitSource>(() => {
+  const source = useMemo<TransitSource | LiveSource>(() => {
     if (USE_FIXTURES) return fixtureSource;
-    const live = liveSource(DIRECT ? browserTransport() : daemonTransport(client), () => ({
+    return liveSource(DIRECT ? browserTransport() : daemonTransport(client), () => ({
       baseUrl: configRef.current.apiBaseUrl,
       feed: configRef.current.feed,
       perStop: configRef.current.perStop,
     }));
-    live.onStatus((slot, status) => setLinks(prev => new Map(prev).set(slotKey(slot), status)));
-    return live;
   }, [client]);
+
+  useEffect(() => {
+    if (!('onStatus' in source)) return;
+    return source.onStatus((slot, status) => {
+      const key = slotKey(slot);
+      setLinks(prev => new Map(prev).set(key, nextLink(prev.get(key), status, Date.now())));
+    });
+  }, [source]);
 
   useEffect(() => {
     const tick = setInterval(() => {
@@ -104,8 +110,12 @@ export default function App() {
 
   useEffect(() => client.config.onChanged(c => setConfig(prev => applyConfig(prev, c.key, c.value))), [client]);
 
+  // every reconnect rereads settings into a fresh array; only a changed list reaches the reducer
+  const seenSlots = useRef<Slot[] | null>(null);
   useEffect(() => {
-    if (config.slots) dispatch({ type: 'slots', slots: config.slots });
+    if (!config.slots || (seenSlots.current && sameSlots(seenSlots.current, config.slots))) return;
+    seenSlots.current = config.slots;
+    dispatch({ type: 'slots', slots: config.slots });
   }, [config.slots]);
 
   useEffect(() => {
@@ -193,6 +203,7 @@ export default function App() {
         alert={screen.alert}
         origin={state.origin}
         units={unitsFor(config.feed)}
+        host={new URL(config.apiBaseUrl).host}
         onLocate={() => tap(LOCATE_ROW, { kind: 'locate' })}
         onRetry={() => tap(RETRY_ROW, { kind: 'retry' })}
         onPick={(stop, row) => tap(row, { kind: 'pickStop', stop })}
@@ -225,7 +236,7 @@ export default function App() {
       nowMs={nowMs}
       connection={connection}
       updatedMs={dataAsOf(everOpen, feed?.updatedMs ?? null)}
-      feedLink={slot ? (links.get(slotKey(slot)) ?? null) : null}
+      link={slot ? (links.get(slotKey(slot)) ?? null) : null}
       firstSeen={feed?.firstSeen ?? new Map()}
       onAddStop={() => void perform({ kind: 'openPicker' })}
     />

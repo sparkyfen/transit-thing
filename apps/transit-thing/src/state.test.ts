@@ -406,11 +406,25 @@ describe('location', () => {
 });
 
 describe('slots from settings', () => {
-  test('replace the list and keep the index in range', () => {
-    const s = reduce({ ...base, index: 2 }, { type: 'slots', slots: [slot(9)] });
+  test('come first and keep the stops the dial added', () => {
+    const s = reduce({ ...base, index: 2 }, { type: 'slots', slots: [slot(9), slot(2)] });
+    expect(s.slots).toEqual([slot(9), slot(2), slot(1), slot(3)]);
+  });
+  test('keep the index on the stop that was showing', () => {
+    expect(reduce({ ...base, index: 2 }, { type: 'slots', slots: [slot(9), slot(2)] }).index).toBe(3);
+    expect(reduce({ ...base, index: 1 }, { type: 'slots', slots: [slot(2)] }).index).toBe(0);
+  });
+  test('the same list again is a no-op', () => {
+    const s = reduce(base, { type: 'slots', slots: [slot(9)] });
+    expect(reduce(s, { type: 'slots', slots: [slot(9)] })).toBe(s);
+    expect(reduce(s, { type: 'slots', slots: [{ ...slot(9) }] })).toBe(s);
+    expect(reduce(base, { type: 'slots', slots: [] })).toBe(base);
+    expect(reduce(base, { type: 'slots', slots: [slot(1), slot(2), slot(3)] })).toBe(base);
+  });
+  test('an empty state takes the list as is', () => {
+    const s = reduce({ ...base, slots: [] }, { type: 'slots', slots: [slot(9)] });
     expect(s.slots).toEqual([slot(9)]);
     expect(s.index).toBe(0);
-    expect(reduce(base, { type: 'slots', slots: [] }).index).toBe(0);
   });
 });
 

@@ -37,7 +37,7 @@ describe('applyConfig', () => {
 describe('apiBaseUrl and slots', () => {
   test('accepts an https origin and nothing else', () => {
     expect(applyConfig(DEFAULT_CONFIG, 'apiBaseUrl', 'https://tt.example.org').apiBaseUrl).toBe('https://tt.example.org/');
-    for (const bad of ['http://tt.example.org', 'https://u:p@tt.example.org/', 'https://tt.example.org/api', 'https://tt.example.org/?x=1', 'nonsense']) {
+    for (const bad of ['http://tt.example.org', 'https://u:p@tt.example.org/', 'https://tt.example.org/api', 'https://tt.example.org/?x=1', 'https://tt.example.org/#x', 'nonsense']) {
       expect(applyConfig(DEFAULT_CONFIG, 'apiBaseUrl', bad)).toBe(DEFAULT_CONFIG);
     }
     expect(applyConfig({ ...DEFAULT_CONFIG, apiBaseUrl: 'https://x.y/' }, 'apiBaseUrl', null).apiBaseUrl).toBe(DEFAULT_CONFIG.apiBaseUrl);
@@ -49,5 +49,15 @@ describe('apiBaseUrl and slots', () => {
       expect(applyConfig(DEFAULT_CONFIG, 'slots', bad)).toBe(DEFAULT_CONFIG);
     }
     expect(applyConfig({ ...DEFAULT_CONFIG, slots: [] }, 'slots', '').slots).toBeNull();
+  });
+  test('caps the slot count, the routes per slot, and the stop name', () => {
+    const entry = (i: number, routes = 1, name = 'x') => ({ stopId: `s${i}`, stopName: name, routeIds: Array.from({ length: routes }, (_, r) => `r${r}`) });
+    expect(applyConfig(DEFAULT_CONFIG, 'slots', JSON.stringify(Array.from({ length: 25 }, (_, i) => entry(i)))).slots).toHaveLength(25);
+    expect(applyConfig(DEFAULT_CONFIG, 'slots', JSON.stringify(Array.from({ length: 26 }, (_, i) => entry(i))))).toBe(DEFAULT_CONFIG);
+    expect(applyConfig(DEFAULT_CONFIG, 'slots', JSON.stringify([entry(0, 25)])).slots?.[0]?.routeIds).toHaveLength(25);
+    expect(applyConfig(DEFAULT_CONFIG, 'slots', JSON.stringify([entry(0, 26)]))).toBe(DEFAULT_CONFIG);
+    expect(applyConfig(DEFAULT_CONFIG, 'slots', JSON.stringify([entry(0, 1, 'n'.repeat(80))])).slots).toHaveLength(1);
+    expect(applyConfig(DEFAULT_CONFIG, 'slots', JSON.stringify([entry(0, 1, 'n'.repeat(81))]))).toBe(DEFAULT_CONFIG);
+    expect(applyConfig(DEFAULT_CONFIG, 'slots', JSON.stringify([entry(0, 1, '')]))).toBe(DEFAULT_CONFIG);
   });
 });

@@ -45,12 +45,14 @@ interface StopsProps {
   alert: PickerAlert | null;
   origin: Origin | null;
   units: Units;
+  // the server that receives the location request, named so the disclosure says who gets it
+  host: string;
   onLocate: () => void;
   onRetry: () => void;
   onPick: (stop: Stop, row: number) => void;
 }
 
-export function StopPicker({ stops, cursor: stored, load, locate, alert, origin, units, onLocate, onRetry, onPick }: StopsProps) {
+export function StopPicker({ stops, cursor: stored, load, locate, alert, origin, units, host, onLocate, onRetry, onPick }: StopsProps) {
   const cursor = visibleCursor({ cursor: stored, load, stops });
   const rowProps = useCursorFocus(cursor);
   const message = pickerMessage(load, stops.length, origin !== null);
@@ -65,7 +67,8 @@ export function StopPicker({ stops, cursor: stored, load, locate, alert, origin,
         <div className="font-mono text-hint tracking-[0.25em] text-soft uppercase">{origin ? 'Stops near you' : 'Stops'}</div>
         <h1 className="m-0 font-display text-screen-title font-medium tracking-display">Pick a stop</h1>
         <p className="m-0 mt-1 text-hint text-soft">
-          Uses this device's location once to find nearby stops. The rounded position goes to the transit server you set. This app does not save it.
+          Uses this device's location once to find nearby stops. Sends an area around you to {host}, the transit server in settings. Transit Thing does not
+          store it.
         </p>
       </header>
       <ol className="m-0 flex min-h-0 flex-1 list-none flex-col overflow-y-auto px-8">

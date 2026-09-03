@@ -1,7 +1,7 @@
 import { parseRoutes, parseServerMessage, parseStops, routesAtUrl, stopsWithinUrl, subscribeMessage, wsUrl } from './api';
 import type { Origin } from './geo';
 import type { Socket, Transport } from './transport';
-import type { Slot, TransitSource } from './types';
+import type { Route, Slot, Stop, TransitSource } from './types';
 
 export type FeedStatus = 'connecting' | 'live' | 'reconnecting';
 
@@ -35,6 +35,9 @@ export class ApiError extends Error {
 export function liveSource(transport: Transport, config: () => LiveConfig, timers: { setTimeout: typeof setTimeout; clearTimeout: typeof clearTimeout } = globalThis): LiveSource {
   const statusHandlers = new Set<(slot: Slot, status: FeedStatus) => void>();
   const emit = (slot: Slot, status: FeedStatus) => statusHandlers.forEach(h => h(slot, status));
+  // stops take the server about 30 s and it rate limits, so a place already asked about answers from memory
+  const stopsCache = new Map<string, Stop[]>();
+  const routesCache = new Map<string, Route[]>();
 
   return {
     subscribe(slot, onTrips) {
@@ -47,13 +50,12 @@ export function liveSource(transport: Transport, config: () => LiveConfig, timer
         if (stopped) return;
         const { baseUrl, perStop } = config();
         socket = transport.open(wsUrl(baseUrl), {
-          onOpen: () => {
-            delay = RECONNECT_MIN_MS;
-            socket?.send(subscribeMessage(slot, perStop));
-          },
+          onOpen: () => socket?.send(subscribeMessage(slot, perStop)),
           onText: text => {
             const msg = parseServerMessage(text);
             if (msg.kind === 'schedule') {
+              // a schedule proves the server accepted the subscription; an open alone can still be refused
+              delay = RECONNECT_MIN_MS;
               emit(slot, 'live');
               onTrips(msg.trips);
             } else if (msg.kind === 'error') {
@@ -89,16 +91,26 @@ export function liveSource(transport: Transport, config: () => LiveConfig, timer
     async stopsNear(origin: Origin | null) {
       if (!origin) return [];
       const { baseUrl, feed } = config();
-      const { status, body } = await transport.getJson(stopsWithinUrl(baseUrl, feed, origin));
+      const url = stopsWithinUrl(baseUrl, feed, origin);
+      const hit = stopsCache.get(url);
+      if (hit) return hit;
+      const { status, body } = await transport.getJson(url);
       if (status !== 200) throw new ApiError(status, `stops request returned ${status}`);
-      return parseStops(body);
+      const stops = parseStops(body);
+      stopsCache.set(url, stops);
+      return stops;
     },
 
     async routesAt(stopId: string) {
       const { baseUrl } = config();
-      const { status, body } = await transport.getJson(routesAtUrl(baseUrl, stopId));
+      const url = routesAtUrl(baseUrl, stopId);
+      const hit = routesCache.get(url);
+      if (hit) return hit;
+      const { status, body } = await transport.getJson(url);
       if (status !== 200) throw new ApiError(status, `routes request returned ${status}`);
-      return parseRoutes(body);
+      const routes = parseRoutes(body);
+      routesCache.set(url, routes);
+      return routes;
     },
 
     onStatus(handler) {

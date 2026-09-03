@@ -17,39 +17,48 @@ export interface Transport {
   open(url: string, handlers: SocketHandlers): Socket;
 }
 
+// a stops reply for a full box is a few KB; anything near this size is not the api
+export const MAX_BODY_BYTES = 256 * 1024;
+// the request budget is 45 s, and the client rpc has to outlive it to see the reply
+const REQUEST_TIMEOUT_MS = 45_000;
+const RPC_TIMEOUT_MS = 50_000;
+
+export function jsonOrNull(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function bodyJson(bytes: Uint8Array): unknown {
+  if (bytes.byteLength > MAX_BODY_BYTES) throw new Error(`body over ${MAX_BODY_BYTES} bytes`);
+  return jsonOrNull(new TextDecoder().decode(bytes));
+}
+
 export function browserTransport(): Transport {
   return {
     async getJson(url) {
-      const res = await fetch(url, { headers: { accept: 'application/json' } });
-      const text = await res.text();
-      let body: unknown = null;
-      try {
-        body = JSON.parse(text);
-      } catch {
-        body = null;
-      }
-      return { status: res.status, body };
+      const res = await fetch(url, { headers: { accept: 'application/json' }, redirect: 'manual' });
+      return { status: res.status, body: bodyJson(new Uint8Array(await res.arrayBuffer())) };
     },
     open(url, handlers) {
       const ws = new WebSocket(url);
       let closed = false;
+      const shutdown = (reason: string) => {
+        if (closed) return;
+        closed = true;
+        handlers.onClose(reason);
+      };
       ws.onopen = () => handlers.onOpen();
       ws.onmessage = e => {
         if (typeof e.data === 'string') handlers.onText(e.data);
       };
-      ws.onclose = e => {
-        if (closed) return;
-        closed = true;
-        handlers.onClose(e.reason || `closed ${e.code}`);
-      };
-      ws.onerror = () => {
-        if (closed) return;
-        closed = true;
-        handlers.onClose('socket error');
-      };
+      ws.onclose = e => shutdown(e.reason || `closed ${e.code}`);
+      ws.onerror = () => shutdown('socket error');
       return {
         send: text => {
-          if (ws.readyState === WebSocket.OPEN) ws.send(text);
+          if (!closed && ws.readyState === WebSocket.OPEN) ws.send(text);
         },
         close: () => {
           closed = true;
@@ -63,48 +72,41 @@ export function browserTransport(): Transport {
 export function daemonTransport(client: BridgethingClient): Transport {
   return {
     async getJson(url) {
-      const res = await client.net.fetch({
-        request: { url, method: 'GET', headers: [{ name: 'accept', value: 'application/json' }], body: null, timeoutMs: 45_000, redirect: 'follow' },
-      });
+      const res = await client.net.fetch(
+        {
+          request: { url, method: 'GET', headers: [{ name: 'accept', value: 'application/json' }], body: null, timeoutMs: REQUEST_TIMEOUT_MS, redirect: 'manual' },
+        },
+        { timeoutMs: RPC_TIMEOUT_MS },
+      );
       if (!res.ok) throw new Error(res.kind === 'domain' ? `net ${res.error.error.type}` : 'daemon request failed');
       const { status, body } = res.response.response;
-      const text = new TextDecoder().decode(new Uint8Array(body as unknown as number[]));
-      let parsed: unknown = null;
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        parsed = null;
-      }
-      return { status, body: parsed };
+      return { status, body: bodyJson(new Uint8Array(body as unknown as number[])) };
     },
     open(url, handlers) {
       const connectionId = crypto.randomUUID();
       let closed = false;
+      // stops every listener; the handler runs only for a close the server or daemon started
+      const shutdown = (reason: string | null) => {
+        if (closed) return;
+        closed = true;
+        offs.forEach(off => off());
+        if (reason !== null) handlers.onClose(reason);
+      };
       const offs = [
         client.net.onWsMessage(m => {
-          if (m.connectionId === connectionId && m.frame.type === 'text') handlers.onText(m.frame.data);
+          if (m.connectionId === connectionId && !closed && m.frame.type === 'text') handlers.onText(m.frame.data);
         }),
         client.net.onWsClosed(m => {
-          if (m.connectionId !== connectionId || closed) return;
-          closed = true;
-          offs.forEach(off => off());
-          handlers.onClose(m.reason || `closed ${m.code}`);
+          if (m.connectionId === connectionId) shutdown(m.reason || `closed ${m.code}`);
         }),
         client.net.onWsErrorEvent(m => {
-          if (m.connectionId !== connectionId || closed) return;
-          closed = true;
-          offs.forEach(off => off());
-          handlers.onClose(m.error.type);
+          if (m.connectionId === connectionId) shutdown(m.error.type);
         }),
       ];
       void client.net.wsOpen({ connectionId, url, protocols: null, headers: null }).then(res => {
         if (closed) return;
         if (res.ok) handlers.onOpen();
-        else {
-          closed = true;
-          offs.forEach(off => off());
-          handlers.onClose(res.kind === 'domain' ? res.error.error.type : 'daemon request failed');
-        }
+        else shutdown(res.kind === 'domain' ? res.error.error.type : 'daemon request failed');
       });
       return {
         send: text => {
@@ -112,8 +114,7 @@ export function daemonTransport(client: BridgethingClient): Transport {
         },
         close: () => {
           if (closed) return;
-          closed = true;
-          offs.forEach(off => off());
+          shutdown(null);
           void client.net.wsClose({ connectionId, code: 1000, reason: 'done' });
         },
       };

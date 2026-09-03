@@ -14,8 +14,10 @@ interface FakeSocket extends Socket {
 
 function fakeTransport(json: Record<string, { status: number; body: unknown }> = {}) {
   const sockets: FakeSocket[] = [];
+  const calls: string[] = [];
   const transport: Transport = {
     async getJson(url) {
+      calls.push(url);
       const hit = json[url];
       if (!hit) throw new Error(`unexpected ${url}`);
       return hit;
@@ -26,7 +28,7 @@ function fakeTransport(json: Record<string, { status: number; body: unknown }> =
       return s;
     },
   };
-  return { transport, sockets };
+  return { transport, sockets, calls };
 }
 
 function fakeTimers() {
@@ -86,10 +88,39 @@ describe('liveSource.subscribe', () => {
     sockets[1]!.handlers.onClose('gone again');
     expect(t.pending[0]!.ms).toBe(RECONNECT_MIN_MS * 2);
     t.fire();
+    // an open the server closes before any schedule does not reset the backoff
     sockets[2]!.handlers.onOpen();
-    sockets[2]!.handlers.onText(JSON.stringify({ event: 'schedule', data: { trips: [] } }));
-    sockets[2]!.handlers.onClose('drop');
+    sockets[2]!.handlers.onClose('refused');
+    expect(t.pending[0]!.ms).toBe(RECONNECT_MIN_MS * 4);
+    t.fire();
+    sockets[3]!.handlers.onOpen();
+    sockets[3]!.handlers.onText(JSON.stringify({ event: 'schedule', data: { trips: [] } }));
+    sockets[3]!.handlers.onClose('drop');
     expect(t.pending[0]!.ms).toBe(RECONNECT_MIN_MS);
+  });
+
+  test('the subscribe message goes out again on the new socket after a reconnect', () => {
+    const { transport, sockets } = fakeTransport();
+    const t = fakeTimers();
+    const src = liveSource(transport, config, t.timers);
+    src.subscribe(slot, () => {});
+    sockets[0]!.handlers.onOpen();
+    sockets[0]!.handlers.onClose('gone');
+    t.fire();
+    sockets[1]!.handlers.onOpen();
+    expect(sockets[1]!.sent).toEqual(sockets[0]!.sent);
+    expect(JSON.parse(sockets[1]!.sent[0]!).event).toBe('schedule:subscribe');
+  });
+
+  test('a removed status handler hears nothing more', () => {
+    const { transport, sockets } = fakeTransport();
+    const src = liveSource(transport, config, fakeTimers().timers);
+    const statuses: string[] = [];
+    const off = src.onStatus((_, s) => statuses.push(s));
+    src.subscribe(slot, () => {});
+    off();
+    sockets[0]!.handlers.onClose('gone');
+    expect(statuses).toEqual(['connecting']);
   });
 
   test('a server error closes the socket and schedules a retry', () => {
@@ -123,11 +154,28 @@ describe('liveSource.subscribe', () => {
 
 describe('liveSource rest calls', () => {
   test('stopsNear needs an origin and parses the reply', async () => {
-    const url = 'https://tt.horner.tj/stops/within/-122.205,47.605,-122.185,47.625?feedCode=st';
+    const url = 'https://tt.horner.tj/stops/within/-122.205,47.606,-122.185,47.624?feedCode=st';
     const { transport } = fakeTransport({ [url]: { status: 200, body: [{ stopId: 'a', stopCode: '1', name: 'A', lat: 1, lon: 2 }] } });
     const src = liveSource(transport, config, fakeTimers().timers);
     expect(await src.stopsNear(null)).toEqual([]);
     expect(await src.stopsNear({ lat: 47.615, lon: -122.195 })).toHaveLength(1);
+  });
+  test('a place already asked about answers from the session cache', async () => {
+    const url = 'https://tt.horner.tj/stops/within/-122.205,47.606,-122.185,47.624?feedCode=st';
+    const routesUrl = 'https://tt.horner.tj/stops/st%3Ax/routes';
+    const { transport, calls } = fakeTransport({ [url]: { status: 200, body: [{ stopId: 'a', lat: 1, lon: 2 }] }, [routesUrl]: { status: 200, body: [{ routeId: 'r' }] } });
+    const src = liveSource(transport, config, fakeTimers().timers);
+    expect(await src.stopsNear({ lat: 47.615, lon: -122.195 })).toEqual(await src.stopsNear({ lat: 47.6199, lon: -122.1901 }));
+    expect(await src.routesAt('st:x')).toEqual(await src.routesAt('st:x'));
+    expect(calls).toEqual([url, routesUrl]);
+  });
+  test('a failed request is not cached', async () => {
+    const routesUrl = 'https://tt.horner.tj/stops/st%3Ax/routes';
+    const { transport, calls } = fakeTransport({ [routesUrl]: { status: 500, body: null } });
+    const src = liveSource(transport, config, fakeTimers().timers);
+    await expect(src.routesAt('st:x')).rejects.toBeInstanceOf(ApiError);
+    await expect(src.routesAt('st:x')).rejects.toBeInstanceOf(ApiError);
+    expect(calls).toHaveLength(2);
   });
   test('a rate limit surfaces as an ApiError with the status', async () => {
     const url = 'https://tt.horner.tj/stops/st%3Ax/routes';

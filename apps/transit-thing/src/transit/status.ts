@@ -4,20 +4,42 @@ export type Connection = 'connecting' | 'open' | 'closing' | 'closed';
 
 export interface BoardStatus {
   text: string;
-  warn: boolean;
+  tone: 'soft' | 'notice' | 'warn';
 }
 
 export type FeedLink = 'connecting' | 'live' | 'reconnecting' | null;
 
-export function boardStatus(connection: Connection, updatedMs: number | null, feed: FeedLink = null): BoardStatus | null {
+export interface Link {
+  status: FeedLink;
+  // when the feed last came back from reconnecting, so the board can say so briefly
+  recoveredAt: number | null;
+}
+
+export const RECOVERED_MS = 5_000;
+
+export function nextLink(prev: Link | undefined, status: FeedLink, nowMs: number): Link {
+  const recoveredAt = prev?.status === 'reconnecting' && status === 'live' ? nowMs : (prev?.recoveredAt ?? null);
+  return { status, recoveredAt };
+}
+
+// while the feed has never delivered, the board body carries the connecting text and the header stays empty
+export function boardStatus(connection: Connection, updatedMs: number | null, link: Link | null = null, nowMs = 0): BoardStatus | null {
+  const feed = link?.status ?? null;
   if (connection === 'open') {
-    if (feed === 'reconnecting') return { text: updatedMs === null ? 'Reconnecting' : `Reconnecting, as of ${clockTime(Math.floor(updatedMs / 1000))}`, warn: true };
-    if (feed === 'connecting' && updatedMs === null) return { text: 'Connecting', warn: false };
+    if (feed === 'reconnecting') return updatedMs === null ? null : { text: `Reconnecting, as of ${clockTime(Math.floor(updatedMs / 1000))}`, tone: 'notice' };
+    if (link?.recoveredAt !== null && link?.recoveredAt !== undefined && nowMs - link.recoveredAt < RECOVERED_MS) return { text: 'Up to date', tone: 'soft' };
     return null;
   }
-  if (connection === 'connecting' && updatedMs === null) return { text: 'Connecting', warn: false };
-  if (updatedMs === null) return { text: 'Offline', warn: true };
-  return { text: `Offline, as of ${clockTime(Math.floor(updatedMs / 1000))}`, warn: true };
+  if (connection === 'connecting' && updatedMs === null) return { text: 'Connecting', tone: 'soft' };
+  if (updatedMs === null) return { text: 'Offline', tone: 'warn' };
+  return { text: `Offline, as of ${clockTime(Math.floor(updatedMs / 1000))}`, tone: 'warn' };
+}
+
+export function waitingText(connection: Connection, feed: FeedLink): string {
+  if (connection !== 'open') return 'Waiting for arrivals.';
+  if (feed === 'reconnecting') return 'Reconnecting to the transit server.';
+  if (feed === 'connecting') return 'Connecting to the transit server.';
+  return 'Waiting for arrivals.';
 }
 
 // fixture data lands before the socket opens; only data received since the first open counts as a last update

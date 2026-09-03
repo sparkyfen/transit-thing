@@ -1,9 +1,10 @@
 import { useScreenFocus } from '../hooks/useScreenFocus';
 import { clockTime, minutesUntil, rowTitle } from '../transit/format';
-import { lateness } from '../transit/delay';
-import { boardStatus, type Connection, type FeedLink } from '../transit/status';
+import { lateness, showLateness } from '../transit/delay';
+import { boardStatus, waitingText, type Connection, type Link } from '../transit/status';
 import type { Slot, Trip } from '../transit/types';
 import { Countdown } from './Countdown';
+import { Lateness } from './Lateness';
 import { RouteBadge } from './RouteBadge';
 
 interface Props {
@@ -16,12 +17,14 @@ interface Props {
   nowMs: number;
   connection: Connection;
   updatedMs: number | null;
-  feedLink: FeedLink;
+  link: Link | null;
   firstSeen: Map<string, number>;
   onAddStop: () => void;
 }
 
-export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, nowMs, connection, updatedMs, feedLink, firstSeen, onAddStop }: Props) {
+const TONE = { soft: 'text-soft', notice: 'text-experimental', warn: 'text-warn' };
+
+export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, nowMs, connection, updatedMs, link, firstSeen, onAddStop }: Props) {
   const root = useScreenFocus();
   if (!slot) {
     return (
@@ -35,7 +38,9 @@ export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, now
     );
   }
   const connected = connection === 'open';
-  const status = boardStatus(connection, updatedMs, feedLink);
+  const feed = link?.status ?? null;
+  const status = boardStatus(connection, updatedMs, link, nowMs);
+  const dim = !connected || feed === 'reconnecting';
   const anyLive = connected && trips.some(t => t.isRealtime);
   return (
     <main ref={root} tabIndex={-1} className="flex h-full w-full flex-col bg-bg text-off-white outline-none">
@@ -49,7 +54,7 @@ export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, now
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           <div className="font-mono text-title tabular-nums text-near">{clockTime(Math.floor(nowMs / 1000))}</div>
-          <div className={`h-[1.125rem] font-mono text-hint leading-[1.125rem] ${status?.warn ? 'text-warn' : 'text-soft'}`} aria-live="polite">
+          <div className={`h-[1.125rem] min-w-[13rem] text-right font-mono text-hint leading-[1.125rem] ${TONE[status?.tone ?? 'soft']}`} aria-live="polite" aria-atomic="true">
             {status?.text}
           </div>
         </div>
@@ -57,7 +62,7 @@ export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, now
       <ol className="m-0 grid flex-1 list-none px-8 py-2" style={{ gridTemplateRows: `repeat(${perStop}, minmax(0, 1fr))` }}>
         {!hasFeed ? (
           <li className="row-span-full self-center text-center text-title text-soft">
-            <span role="status">Waiting for arrivals.</span>
+            <span role="status">{waitingText(connection, feed)}</span>
           </li>
         ) : trips.length === 0 ? (
           <li className="row-span-full self-center text-center text-title text-soft">
@@ -66,14 +71,14 @@ export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, now
         ) : (
           trips.map(trip => {
             const min = minutesUntil(trip.arrivalTime, nowMs);
-            const late = connected && trip.isRealtime ? lateness(trip, firstSeen) : null;
+            const late = showLateness(connected, trip) ? lateness(trip, firstSeen) : null;
             return (
               <li key={trip.tripId} className="grid grid-cols-[auto_1fr_auto] items-center gap-5 border-b border-rule last:border-b-0">
                 <RouteBadge name={trip.routeName} color={trip.routeColor} size="lg" />
                 <div className="min-w-0 truncate text-row-lg text-near">{rowTitle(trip.routeName, trip.headsign)}</div>
                 <div className="flex items-center gap-3">
-                  <Countdown min={min} size="board" dim={!connected} />
-                  <span className="w-[4rem] text-right font-mono text-hint">{late ? late.kind === 'late' ? <span className="text-warn">+{late.minutes} min</span> : <span className="text-soft">early</span> : ''}</span>
+                  <Countdown min={min} size="board" dim={dim} />
+                  <Lateness value={late} />
                   <span className="flex w-[5.5rem] items-center justify-end gap-2 font-mono text-body tabular-nums text-soft">
                     {clockTime(trip.arrivalTime)}
                     {connected ? (

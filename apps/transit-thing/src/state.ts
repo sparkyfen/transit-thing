@@ -109,6 +109,16 @@ export function selectOn(screen: Screen): SelectTarget | null {
   return stop ? { kind: 'pickStop', stop } : null;
 }
 
+// settings come first, then whatever the dial added that settings do not name, so a reread never drops a stop
+export function mergeSlots(fromConfig: Slot[], current: Slot[]): Slot[] {
+  const keys = new Set(fromConfig.map(slotKey));
+  return [...fromConfig, ...current.filter(s => !keys.has(slotKey(s)))];
+}
+
+export function sameSlots(a: Slot[], b: Slot[]): boolean {
+  return a.length === b.length && a.every((s, i) => slotKey(s) === slotKey(b[i]!));
+}
+
 export function sortByDistance(stops: Stop[], origin: Origin | null): Stop[] {
   if (!origin) return stops;
   const from = (s: Stop) => haversine(origin.lat, origin.lon, s.lat, s.lon);
@@ -162,8 +172,12 @@ function step(state: State, action: Action): State {
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;
       return { ...state, screen: { ...screen, locate: 'failed', alert: 'locate' } };
     case 'slots': {
-      const index = Math.min(state.index, Math.max(0, action.slots.length - 1));
-      return { ...state, slots: action.slots, index };
+      const slots = mergeSlots(action.slots, state.slots);
+      if (sameSlots(slots, state.slots)) return state;
+      const current = state.slots[state.index];
+      const kept = current ? slots.findIndex(s => slotKey(s) === slotKey(current)) : -1;
+      const index = kept >= 0 ? kept : Math.min(state.index, Math.max(0, slots.length - 1));
+      return { ...state, slots, index };
     }
     case 'origin':
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;

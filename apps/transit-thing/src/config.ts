@@ -1,3 +1,4 @@
+import { ID } from './transit/api';
 import type { Slot } from './transit/types';
 
 export interface Config {
@@ -23,7 +24,6 @@ export function parseBaseUrl(value: string): string | null {
   return u.toString();
 }
 
-const ID = /^[A-Za-z0-9:_.-]{1,64}$/;
 const MAX_SLOTS = 25;
 
 // the whole value is dropped on any bad entry so a half-valid paste never renders
