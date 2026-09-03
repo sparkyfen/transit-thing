@@ -100,9 +100,11 @@ export function pickerMessage(load: LoadStatus, stopCount: number, nearYou: bool
 export function selectOn(screen: Screen): SelectTarget | null {
   if (screen.kind === 'board') return { kind: 'openPicker' };
   if (screen.kind !== 'picker') return null;
-  if (screen.cursor === LOCATE_ROW) return screen.locate === 'locating' ? null : { kind: 'locate' };
+  // one cursor drives both the highlight and the press
+  const cursor = visibleCursor(screen);
+  if (cursor === LOCATE_ROW) return screen.locate === 'locating' ? null : { kind: 'locate' };
   if (screen.load === 'failed') return { kind: 'retry' };
-  const stop = screen.stops[stopIndex(screen.cursor)];
+  const stop = screen.stops[stopIndex(cursor)];
   return stop ? { kind: 'pickStop', stop } : null;
 }
 

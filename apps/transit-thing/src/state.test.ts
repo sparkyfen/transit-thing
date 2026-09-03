@@ -112,7 +112,7 @@ describe('loading stops', () => {
     const s = reduce(onRetry, { type: 'stopsRequested', token: 1, reqId: 2 });
     expect(s.screen).toMatchObject({ load: 'loading', cursor: 1, latestReq: 2 });
     expect(pickerMessage('loading', 0, false)).toBe('Loading stops.');
-    expect(selectOn(s.screen)).toBeNull();
+    expect(selectOn(s.screen)).toEqual({ kind: 'locate' });
     expect(reduce(s, { type: 'stops', token: 1, reqId: 2, stops: [stop] }).screen).toMatchObject({ load: 'ready', stops: [stop], cursor: 1 });
     expect(reduce(s, { type: 'stops', token: 1, reqId: 2, stops: [] }).screen).toMatchObject({ load: 'ready', cursor: 0 });
   });
@@ -124,7 +124,7 @@ describe('loading stops', () => {
     expect(s.screen.kind === 'picker' && visibleCursor(s.screen)).toBe(LOCATE_ROW);
     expect(reduce(s, { type: 'turn', delta: 1, at: 2 }).screen).toMatchObject({ cursor: 1 });
     expect(reduce(s, { type: 'turn', delta: -1, at: 2 }).screen).toMatchObject({ cursor: 1 });
-    expect(selectOn(s.screen)).toBeNull();
+    expect(selectOn(s.screen)).toEqual({ kind: 'locate' });
     const moved = reduce(picker(), { type: 'turn', delta: 1, at: 3 });
     expect(moved.screen.kind === 'picker' && visibleCursor(moved.screen)).toBe(1);
     expect(reduce(opened(), { type: 'turn', delta: 1, at: 4 }).screen).toMatchObject({ cursor: 0 });
