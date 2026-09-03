@@ -52,7 +52,7 @@ interface StopsProps {
 
 export function StopPicker({ stops, cursor, load, locate, alert, origin, units, onLocate, onRetry, onPick }: StopsProps) {
   const rowProps = useCursorFocus(cursor);
-  const message = pickerMessage(load, locate, stops.length, origin !== null);
+  const message = pickerMessage(load, stops.length, origin !== null);
   // the stop count is for screen readers only; sighted users see the list itself
   const visible = stops.length === 0 ? message : null;
   // a live region only announces text that arrives after it mounts, so it starts empty

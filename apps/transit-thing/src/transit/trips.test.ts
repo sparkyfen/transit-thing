@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { forSlot, nextAcrossSlots, slotKey, soonestUpcoming } from './trips';
+import { everySlotHasFeed, forSlot, nextAcrossSlots, slotKey, soonestUpcoming } from './trips';
 import type { Trip } from './types';
 
 const now = Date.UTC(2026, 8, 2, 20, 0, 0);
@@ -56,6 +56,16 @@ describe('nextAcrossSlots', () => {
   });
   test('nothing when every slot is empty', () => {
     expect(nextAcrossSlots(feeds([], []), [a, b], now, cutoff)).toBeNull();
+  });
+});
+
+describe('everySlotHasFeed', () => {
+  const a = { stopId: 's1', stopName: 'A', routeIds: ['r1'] };
+  const b = { stopId: 's2', stopName: 'B', routeIds: ['r2'] };
+  test('is false until every slot has a feed', () => {
+    expect(everySlotHasFeed(new Map(), [a, b])).toBe(false);
+    expect(everySlotHasFeed(new Map([[slotKey(a), { trips: [] }]]), [a, b])).toBe(false);
+    expect(everySlotHasFeed(new Map([[slotKey(a), { trips: [] }], [slotKey(b), { trips: [] }]]), [a, b])).toBe(true);
   });
 });
 

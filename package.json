@@ -23,7 +23,6 @@
   },
   "devDependencies": {
     "@bridgething/source": "^0.12.1",
-    "playwright": "^1.62.1",
     "prettier": "^3.9.6",
     "typescript": "^6.0.3"
   }

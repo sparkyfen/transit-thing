@@ -57,7 +57,9 @@ export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, now
             <span role="status">Waiting for arrivals.</span>
           </li>
         ) : trips.length === 0 ? (
-          <li className="row-span-full self-center text-center text-title text-soft">No arrivals scheduled.</li>
+          <li className="row-span-full self-center text-center text-title text-soft">
+            <span role="status">No arrivals scheduled.</span>
+          </li>
         ) : (
           trips.map(trip => {
             const min = minutesUntil(trip.arrivalTime, nowMs);

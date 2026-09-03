@@ -10,9 +10,9 @@ import { LOCATE_ROW, reduce, RETRY_ROW, selectOn, type Action, type SelectTarget
 import { FIXTURE_SLOTS, fixtureSource } from './transit/fixtures';
 import { unitsFor } from './transit/format';
 import { locate, type Origin } from './transit/geo';
-import { requestStops } from './transit/loadStops';
+import { requestRoutes, requestStops } from './transit/loadStops';
 import { dataAsOf } from './transit/status';
-import { forSlot, nextAcrossSlots, slotKey, soonestUpcoming } from './transit/trips';
+import { everySlotHasFeed, forSlot, nextAcrossSlots, slotKey, soonestUpcoming } from './transit/trips';
 import type { Slot, Trip } from './transit/types';
 
 const SOON_MS = 20 * 60_000;
@@ -102,13 +102,7 @@ export default function App() {
         dispatch({ type: 'origin', token, origin: here });
         return loadStops(token, here);
       }
-      dispatch({ type: 'routesRequested', token });
-      try {
-        const routes = await fixtureSource.routesAt(target.stop.stopId);
-        dispatch({ type: 'openRoutes', token, stop: target.stop, routes });
-      } catch {
-        dispatch({ type: 'routesFailed', token });
-      }
+      return requestRoutes({ dispatch, source: fixtureSource, token, reqId: ++reqs.current, stop: target.stop });
     },
     [client, loadStops],
   );
@@ -145,7 +139,9 @@ export default function App() {
   const next = useMemo(() => nextAcrossSlots(feeds, state.slots, nowMs, SOON_MS), [state.slots, feeds, nowMs]);
 
   const { screen } = state;
-  if (screen.kind === 'ambient') return <Ambient nowMs={nowMs} next={next} hasFeed={feeds.size > 0} />;
+  if (screen.kind === 'ambient') {
+    return <Ambient nowMs={nowMs} next={next} hasStops={state.slots.length > 0} hasFeed={everySlotHasFeed(feeds, state.slots)} />;
+  }
   if (screen.kind === 'picker') {
     return (
       <StopPicker

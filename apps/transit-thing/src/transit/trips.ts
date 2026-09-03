@@ -17,6 +17,10 @@ export function soonestUpcoming(trips: Trip[], nowMs: number, n: number): Trip[]
     .slice(0, n);
 }
 
+export function everySlotHasFeed(feeds: Map<string, unknown>, slots: Slot[]): boolean {
+  return slots.every(slot => feeds.has(slotKey(slot)));
+}
+
 export interface NextTrip {
   slot: Slot;
   trip: Trip;
