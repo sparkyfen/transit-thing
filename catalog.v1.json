@@ -1,7 +1,7 @@
 {
   "$schema": "https://apps.bridgething.com/schemas/catalog/v1.json",
   "schema": "catalog.v1",
-  "updated_at": "2026-09-03T05:39:48.967Z",
+  "updated_at": "2026-09-03T09:23:45.066Z",
   "repo": {
     "name": "Transit Thing",
     "description": "Next bus, train, and ferry arrivals for the stops you care about.",
@@ -12,7 +12,7 @@
     {
       "id": "01a06478-f4f4-725a-8bc0-776641f7a436",
       "name": "Transit Thing",
-      "description": "Next arrivals for your stops, from a Transit Tracker server (tt.horner.tj by default). Reads this device's location only when you ask for nearby stops.",
+      "description": "Next arrivals for your stops, from a Transit Tracker server (tt.horner.tj by default). Reads this device's location only when you ask for nearby stops, and sends an area around you, not your exact position, to that server.",
       "author": "Sparky Fen",
       "icon": "https://sparkyfen.github.io/transit-thing/icons/01a06478-f4f4-725a-8bc0-776641f7a436.svg",
       "screenshots": [
@@ -23,6 +23,27 @@
       "homepage": "https://github.com/sparkyfen/transit-thing",
       "source": "https://github.com/sparkyfen/transit-thing",
       "versions": [
+        {
+          "version": "0.2.0",
+          "released_at": "2026-09-03T09:23:45.063Z",
+          "download": {
+            "url": "https://sparkyfen.github.io/transit-thing/r/01a06478-f4f4-725a-8bc0-776641f7a436/0.2.0.zip",
+            "size": 858641,
+            "sha256": "77067fcd567c3a8766714b31a958f3a1cb30f90f5401b4265c3ab9802999a210"
+          },
+          "settings": {
+            "url": "https://sparkyfen.github.io/transit-thing/s/01a06478-f4f4-725a-8bc0-776641f7a436/0.2.0.html",
+            "size": 26929,
+            "sha256": "9d88c6e43fd0dfd28cf6219aebaf25f462c203f0565ef3b060b198b778d7bae7"
+          },
+          "permissions": [
+            "geo",
+            "net.fetch",
+            "net.ws"
+          ],
+          "min_libbridgething_version": "0.12.1",
+          "changelog": "Live arrivals from a Transit Tracker server. The board subscribes to each saved stop over the phone link, shows next arrivals with live markers, and reconnects on its own. The stop picker finds nearby stops from an area around your location and loads real routes. Late and early markers appear when a server reports delays or a prediction drifts. Settings gain a server URL, a feed code, and a stops list. Ids with spaces, such as New York MTA routes, are accepted."
+        },
         {
           "version": "0.1.0",
           "released_at": "2026-09-03T05:39:48.962Z",
@@ -37,7 +58,9 @@
             "sha256": "9d88c6e43fd0dfd28cf6219aebaf25f462c203f0565ef3b060b198b778d7bae7"
           },
           "permissions": [
-            "geo"
+            "geo",
+            "net.fetch",
+            "net.ws"
           ],
           "min_libbridgething_version": "0.12.1",
           "changelog": "First release."
