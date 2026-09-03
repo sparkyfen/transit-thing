@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { clockTime, countdown, countdownLabel, rowTitle } from '../transit/format';
+import { clockTime, countdown, rowTitle } from '../transit/format';
 import { boardStatus, type Connection } from '../transit/status';
 import type { Slot, Trip } from '../transit/types';
+import { Countdown } from './Countdown';
 import { RouteBadge } from './RouteBadge';
 
 interface Props {
@@ -26,9 +27,9 @@ export function Board({ slot, slotIndex, slotCount, trips, perStop, nowMs, conne
     return (
       <main ref={root} tabIndex={-1} className="flex h-full w-full flex-col items-center justify-center gap-6 bg-bg px-16 text-center text-off-white outline-none">
         <h1 className="m-0 font-display text-screen-title font-medium tracking-display">No stops yet</h1>
-        <p className="m-0 max-w-[36ch] text-title text-soft">Add a stop from the companion app, or pick one near you.</p>
+        <p className="m-0 max-w-[36ch] text-title text-soft">Add a stop from the companion app, or pick one on the device.</p>
         <button className="border border-accent bg-accent px-8 py-4 font-mono text-row-lg text-screen" onClick={onAddStop}>
-          Find nearby stops
+          Add a stop
         </button>
       </main>
     );
@@ -48,7 +49,7 @@ export function Board({ slot, slotIndex, slotCount, trips, perStop, nowMs, conne
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           <div className="font-mono text-title tabular-nums text-near">{clockTime(Math.floor(nowMs / 1000))}</div>
-          <div className={`font-mono text-hint ${status?.warn ? 'text-warn' : 'text-soft'}`} aria-live="polite">
+          <div className={`h-[1.125rem] font-mono text-hint leading-[1.125rem] ${status?.warn ? 'text-warn' : 'text-soft'}`} aria-live="polite">
             {status?.text}
           </div>
         </div>
@@ -61,22 +62,10 @@ export function Board({ slot, slotIndex, slotCount, trips, perStop, nowMs, conne
             const min = countdown(trip.arrivalTime, nowMs);
             return (
               <li key={trip.tripId} className="grid grid-cols-[auto_1fr_auto] items-center gap-5 border-b border-rule last:border-b-0">
-                <RouteBadge name={trip.routeName} color={trip.routeColor} headsign={trip.headsign} size="lg" />
+                <RouteBadge name={trip.routeName} color={trip.routeColor} size="lg" />
                 <div className="min-w-0 truncate text-row-lg text-near">{rowTitle(trip.routeName, trip.headsign)}</div>
                 <div className="flex items-center gap-3">
-                  <span className="flex h-[3.25rem] w-[8.5rem] items-baseline justify-end gap-2">
-                    <span className="sr-only">{countdownLabel(min)}</span>
-                    <span
-                      className={`font-display text-[3.25rem] leading-none font-medium tabular-nums tracking-display ${connected ? '' : 'text-soft'}`}
-                      aria-hidden="true">
-                      {min}
-                    </span>
-                    {min === 'now' ? null : (
-                      <span className="font-mono text-hint text-soft" aria-hidden="true">
-                        min
-                      </span>
-                    )}
-                  </span>
+                  <Countdown min={min} size="board" dim={!connected} />
                   <span className="flex w-[5.5rem] items-center justify-end gap-2 font-mono text-body tabular-nums text-soft">
                     {clockTime(trip.arrivalTime)}
                     {connected ? (

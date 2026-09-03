@@ -1,4 +1,5 @@
-import type { PickerStatus } from '../state';
+import { useEffect, useState } from 'react';
+import { pickerMessage, type PickerStatus } from '../state';
 import { distanceLabel, rowTitle } from '../transit/format';
 import { haversine, type Origin } from '../transit/geo';
 import type { Route, Stop } from '../transit/types';
@@ -36,14 +37,17 @@ interface StopsProps {
 
 export function StopPicker({ stops, cursor, status, origin, onLocate, onRetry, onPick }: StopsProps) {
   const rowProps = useCursorFocus(cursor);
-  const message = status === 'loading' ? 'Loading stops' : status !== 'stopsFailed' && stops.length === 0 ? 'No stops found near you.' : null;
+  const message = pickerMessage(status, stops.length);
+  // a live region only announces text that arrives after it mounts, so it starts empty
+  const [announced, setAnnounced] = useState<string | null>(null);
+  useEffect(() => setAnnounced(message), [message]);
   return (
     <main className="flex h-full w-full flex-col bg-bg text-off-white">
       <header className="px-8 pt-6 pb-2">
-        <div className="font-mono text-hint tracking-[0.25em] text-soft uppercase">Stops near you</div>
+        <div className="font-mono text-hint tracking-[0.25em] text-soft uppercase">{origin ? 'Stops near you' : 'Stops'}</div>
         <h1 className="m-0 font-display text-screen-title font-medium tracking-display">Pick a stop</h1>
         <p className="m-0 mt-1 text-hint text-soft">
-          Uses this device's location once to find nearby stops. The rounded position goes to the transit server you set, and is not saved.
+          Uses this device's location once to find nearby stops. The rounded position goes to the transit server you set. This app does not save it.
         </p>
       </header>
       <ol className="m-0 flex min-h-0 flex-1 list-none flex-col overflow-y-auto px-8">
@@ -52,9 +56,11 @@ export function StopPicker({ stops, cursor, status, origin, onLocate, onRetry, o
             <span className="text-row-lg">{status === 'locating' ? 'Finding your location' : 'Use my location'}</span>
           </button>
         </li>
-        <li role="status" className={message ? 'py-10 text-center text-row-lg text-soft' : 'sr-only'}>
-          {message}
-        </li>
+        {message ? (
+          <li className="py-10 text-center text-row-lg text-soft" aria-hidden="true">
+            {message}
+          </li>
+        ) : null}
         {status === 'stopsFailed' ? (
           <li>
             <p className="m-0 px-3 py-2 font-mono text-hint text-warn" role="alert">
@@ -77,6 +83,9 @@ export function StopPicker({ stops, cursor, status, origin, onLocate, onRetry, o
           ))
         )}
       </ol>
+      <div role="status" className="sr-only">
+        {announced}
+      </div>
       {status === 'routesFailed' || status === 'locateFailed' ? (
         <p className="m-0 px-8 py-2 font-mono text-hint text-warn" role="alert">
           {status === 'locateFailed' ? "Couldn't get this device's location." : "Couldn't load routes for that stop. Try again."}
@@ -113,9 +122,8 @@ export function RoutePicker({ stop, routes, cursor, chosen, onToggle, onSave }: 
         </h1>
       </header>
       {routes.length === 0 ? (
-        <div role="status" className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center">
-          <p className="m-0 text-row-lg text-soft">No routes serve this stop</p>
-          <p className="m-0 font-mono text-hint text-soft">Back returns to stops</p>
+        <div ref={focusOnAttach} tabIndex={-1} className="flex flex-1 flex-col items-center justify-center px-8 text-center outline-none">
+          <p className="m-0 text-row-lg text-soft">No routes serve this stop.</p>
         </div>
       ) : (
         <>
@@ -123,6 +131,7 @@ export function RoutePicker({ stop, routes, cursor, chosen, onToggle, onSave }: 
             <ol className="m-0 list-none">
               {routes.map((route, i) => {
                 const on = chosen.includes(route.routeId);
+                const headsigns = route.headsigns.join(' · ');
                 return (
                   <li key={route.routeId}>
                     <button {...rowProps(i)} role="checkbox" aria-checked={on} className={rowClass(i === cursor)} onClick={() => onToggle(route.routeId)}>
@@ -131,8 +140,8 @@ export function RoutePicker({ stop, routes, cursor, chosen, onToggle, onSave }: 
                         aria-hidden="true">
                         {on ? '✓' : ''}
                       </span>
-                      <RouteBadge name={route.name} color={route.color} headsign={route.headsigns.join(' ')} size="sm" />
-                      <span className="truncate text-row text-soft">{rowTitle(route.name, route.headsigns.join(' · '))}</span>
+                      <RouteBadge name={route.name} color={route.color} size="sm" />
+                      <span className="truncate text-row text-soft">{rowTitle(route.name, headsigns)}</span>
                     </button>
                   </li>
                 );
@@ -148,7 +157,7 @@ export function RoutePicker({ stop, routes, cursor, chosen, onToggle, onSave }: 
               aria-disabled={!canSave}
               aria-describedby="save-hint"
               className={`border px-4 py-2 font-mono text-row-lg outline-none ${
-                cursor !== saveRow ? 'border-edge text-near' : canSave ? 'border-accent bg-accent text-screen' : 'border-accent text-near'
+                cursor !== saveRow ? 'border-edge text-near' : canSave ? 'border-accent bg-accent text-screen' : 'border-accent text-soft'
               }`}
               onClick={() => canSave && onSave()}>
               {saveLabel}
@@ -157,7 +166,7 @@ export function RoutePicker({ stop, routes, cursor, chosen, onToggle, onSave }: 
         </>
       )}
       <footer className="flex justify-between gap-6 px-8 pb-4 font-mono text-hint text-soft">
-        <span>Turn the dial to move, press it to choose</span>
+        <span>{routes.length === 0 ? '' : 'Turn the dial to move, press it to choose'}</span>
         <span>Back returns to stops</span>
       </footer>
     </main>

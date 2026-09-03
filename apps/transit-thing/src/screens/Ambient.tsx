@@ -1,10 +1,11 @@
-import { clockTime, countdown, countdownLabel, rowTitle } from '../transit/format';
-import type { Slot, Trip } from '../transit/types';
+import { ambientTitle, clockTime, countdown } from '../transit/format';
+import type { NextTrip } from '../transit/trips';
+import { Countdown } from './Countdown';
 import { RouteBadge } from './RouteBadge';
 
 interface Props {
   nowMs: number;
-  next: { slot: Slot; trip: Trip } | null;
+  next: NextTrip | null;
 }
 
 export function Ambient({ nowMs, next }: Props) {
@@ -15,20 +16,13 @@ export function Ambient({ nowMs, next }: Props) {
       <h1 className="sr-only">Clock and next arrival</h1>
       <div className="font-display text-[6rem] leading-none font-medium tabular-nums tracking-display">{clockTime(seconds)}</div>
       {next && min ? (
-        <div className="flex w-[40rem] items-center gap-4">
-          <RouteBadge name={next.trip.routeName} color={next.trip.routeColor} headsign={next.trip.headsign} size="sm" />
-          <span className="min-w-0 flex-1 truncate text-title text-soft">to {rowTitle(next.trip.routeName, next.trip.headsign)}</span>
-          <span className="flex h-[4rem] w-[11rem] items-baseline gap-2 text-left">
-            <span className="sr-only">{countdownLabel(min)}</span>
-            <span className="font-display text-[4rem] leading-none font-medium tabular-nums tracking-display" aria-hidden="true">
-              {min}
-            </span>
-            {min === 'now' ? null : (
-              <span className="font-mono text-hint text-soft" aria-hidden="true">
-                min
-              </span>
-            )}
-          </span>
+        <div className="flex max-w-[44rem] flex-col items-center gap-2">
+          <div className="flex max-w-full items-center gap-4">
+            <RouteBadge name={next.trip.routeName} color={next.trip.routeColor} size="sm" />
+            <span className="min-w-0 truncate text-title text-soft">{ambientTitle(next.trip.routeName, next.trip.headsign)}</span>
+            <Countdown min={min} size="ambient" />
+          </div>
+          <div className="max-w-full truncate font-mono text-hint text-soft">at {next.slot.stopName}</div>
         </div>
       ) : (
         <div className="font-mono text-title text-soft">Nothing due soon</div>

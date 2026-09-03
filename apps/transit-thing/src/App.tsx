@@ -9,7 +9,8 @@ import { RoutePicker, StopPicker } from './screens/Picker';
 import { reduce, selectOn, type Action, type SelectTarget, type State } from './state';
 import { FIXTURE_SLOTS, fixtureSource } from './transit/fixtures';
 import { locate, type Origin } from './transit/geo';
-import { forSlot, slotKey, soonestUpcoming } from './transit/trips';
+import { dataAsOf } from './transit/status';
+import { forSlot, nextAcrossSlots, slotKey, soonestUpcoming } from './transit/trips';
 import type { Slot, Trip } from './transit/types';
 
 const SOON_MS = 20 * 60_000;
@@ -30,20 +31,20 @@ export default function App() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [feeds, setFeeds] = useState<Map<string, Feed>>(() => new Map());
   const [connection, setConnection] = useState(client.connectionState);
+  const [everOpen, setEverOpen] = useState(false);
   const [config, setConfig] = useState<Config>(DEFAULT_CONFIG);
-  const ambientIdle = useRef(config.ambientIdle);
-  ambientIdle.current = config.ambientIdle;
 
   useEffect(() => {
     const tick = setInterval(() => {
       const at = Date.now();
       setNowMs(at);
-      if (ambientIdle.current) dispatch({ type: 'idle', at });
+      if (config.ambientIdle) dispatch({ type: 'idle', at });
     }, 1000);
     return () => clearInterval(tick);
-  }, []);
+  }, [config.ambientIdle]);
 
   useEffect(() => client.on(e => {
+    if (e.type === 'open') setEverOpen(true);
     if (e.type === 'open' || e.type === 'close' || e.type === 'connecting') setConnection(client.connectionState);
   }), [client]);
 
@@ -118,18 +119,20 @@ export default function App() {
 
   useControls(send);
 
+  // a tap lands the dial cursor on the row it hit, then does what a press there would
+  const tap = useCallback(
+    (cursor: number, target: SelectTarget) => {
+      dispatch({ type: 'cursor', cursor, at: Date.now() });
+      void perform(target);
+    },
+    [perform],
+  );
+
   const slot: Slot | null = state.slots[state.index] ?? null;
   const feed = slot ? feeds.get(slotKey(slot)) : undefined;
   const trips = soonestUpcoming(feed?.trips ?? [], nowMs, config.perStop);
 
-  const next = useMemo(() => {
-    let best: { slot: Slot; trip: Trip } | null = null;
-    for (const s of state.slots) {
-      const t = soonestUpcoming(feeds.get(slotKey(s))?.trips ?? [], nowMs, 1)[0];
-      if (t && (!best || t.arrivalTime < best.trip.arrivalTime)) best = { slot: s, trip: t };
-    }
-    return best && best.trip.arrivalTime * 1000 - nowMs <= SOON_MS ? best : null;
-  }, [state.slots, feeds, nowMs]);
+  const next = useMemo(() => nextAcrossSlots(feeds, state.slots, nowMs, SOON_MS), [state.slots, feeds, nowMs]);
 
   const { screen } = state;
   if (screen.kind === 'ambient') return <Ambient nowMs={nowMs} next={next} />;
@@ -140,9 +143,9 @@ export default function App() {
         cursor={screen.cursor}
         status={screen.status}
         origin={state.origin}
-        onLocate={() => void perform({ kind: 'locate' })}
-        onRetry={() => void perform({ kind: 'retry' })}
-        onPick={stop => void perform({ kind: 'pickStop', stop })}
+        onLocate={() => tap(0, { kind: 'locate' })}
+        onRetry={() => tap(1, { kind: 'retry' })}
+        onPick={stop => tap(screen.stops.indexOf(stop) + 1, { kind: 'pickStop', stop })}
       />
     );
   }
@@ -167,7 +170,7 @@ export default function App() {
       perStop={config.perStop}
       nowMs={nowMs}
       connection={connection}
-      updatedMs={feed?.updatedMs ?? null}
+      updatedMs={dataAsOf(everOpen, feed?.updatedMs ?? null)}
       onAddStop={() => void perform({ kind: 'openPicker' })}
     />
   );

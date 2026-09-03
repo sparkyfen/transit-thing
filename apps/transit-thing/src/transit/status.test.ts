@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { clockTime } from './format';
-import { boardStatus } from './status';
+import { boardStatus, dataAsOf } from './status';
 
 const at = Date.UTC(2026, 8, 2, 20, 0, 0);
 
@@ -19,5 +19,16 @@ describe('boardStatus', () => {
   test('offline without data', () => {
     expect(boardStatus('closed', null)).toEqual({ text: 'Offline', warn: true });
     expect(boardStatus('closing', null)).toEqual({ text: 'Offline', warn: true });
+  });
+});
+
+describe('dataAsOf', () => {
+  test('data that arrived before the socket ever opened does not count', () => {
+    expect(dataAsOf(false, at)).toBeNull();
+    expect(boardStatus('connecting', dataAsOf(false, at))).toEqual({ text: 'Connecting', warn: false });
+  });
+  test('data after the first open does', () => {
+    expect(dataAsOf(true, at)).toBe(at);
+    expect(dataAsOf(true, null)).toBeNull();
   });
 });

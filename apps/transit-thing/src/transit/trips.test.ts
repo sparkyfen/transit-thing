@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { forSlot, slotKey, soonestUpcoming } from './trips';
+import { forSlot, nextAcrossSlots, slotKey, soonestUpcoming } from './trips';
 import type { Trip } from './types';
 
 const now = Date.UTC(2026, 8, 2, 20, 0, 0);
@@ -34,6 +34,28 @@ describe('forSlot', () => {
   test('keeps only the routes the slot follows', () => {
     const slot = { stopId: 's1', stopName: 'Stop', routeIds: ['r2'] };
     expect(forSlot(slot, [trip('a', 60, 'r1'), trip('b', 60, 'r2')]).map(t => t.tripId)).toEqual(['b']);
+  });
+});
+
+describe('nextAcrossSlots', () => {
+  const a = { stopId: 's1', stopName: 'Stop 1', routeIds: ['r1'] };
+  const b = { stopId: 's2', stopName: 'Stop 2', routeIds: ['r1'] };
+  const cutoff = 20 * 60_000;
+  const feeds = (ta: Trip[], tb: Trip[]) =>
+    new Map([
+      [slotKey(a), { trips: ta }],
+      [slotKey(b), { trips: tb }],
+    ]);
+  test('picks the earlier trip across two slots', () => {
+    const next = nextAcrossSlots(feeds([trip('a', 600)], [trip('b', 120)]), [a, b], now, cutoff);
+    expect(next?.trip.tripId).toBe('b');
+    expect(next?.slot).toBe(b);
+  });
+  test('nothing when the earliest trip is past the cutoff', () => {
+    expect(nextAcrossSlots(feeds([trip('a', 21 * 60)], []), [a, b], now, cutoff)).toBeNull();
+  });
+  test('nothing when every slot is empty', () => {
+    expect(nextAcrossSlots(feeds([], []), [a, b], now, cutoff)).toBeNull();
   });
 });
 

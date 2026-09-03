@@ -1,6 +1,6 @@
 # Transit Thing
 
-Next bus, train, and ferry departures on a Spotify Car Thing running
+Next bus, train, and ferry arrivals on a Spotify Car Thing running
 [bridgething](https://bridgething.com). An arrivals board for your desk that
 also works in the car.
 
@@ -10,7 +10,7 @@ also works in the car.
 
 ## What it does
 
-- Shows the next departures for the stops you save, with a countdown, the
+- Shows the next arrivals for the stops you save, with a countdown, the
   scheduled time, and a live marker when the agency sends real-time data.
 - Turn the dial to move between stops. Presets 1 to 4 jump to your first four.
 - Press the dial or tap **Add a stop** to pick a stop from the ones around
@@ -20,7 +20,7 @@ also works in the car.
 
 Data comes from a [Transit Tracker API](https://github.com/tjhorner/transit-tracker-api)
 server. The default is TJ Horner's public instance at `tt.horner.tj`, which
-serves dozens of agencies across North America and Europe, including all of Puget
+serves dozens of agencies across North America and Europe, including Puget
 Sound. You can point the app at your own server in its settings.
 
 ## Install
@@ -36,7 +36,7 @@ Sound. You can point the app at your own server in its settings.
 
 The app uses this device's location once to find nearby stops, and only when
 you ask. The rounded position goes to the transit server you set
-(`tt.horner.tj` by default), and is not saved.
+(`tt.horner.tj` by default). This app does not save it.
 
 ## Develop
 

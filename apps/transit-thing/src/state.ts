@@ -24,6 +24,7 @@ export type Action =
   | { type: 'back'; at: number }
   | { type: 'mode'; at: number }
   | { type: 'idle'; at: number }
+  | { type: 'cursor'; cursor: number; at: number }
   | { type: 'toggleRoute'; routeId: string; at: number }
   | { type: 'saveSlot'; at: number }
   | { type: 'openPicker'; token: number; at: number }
@@ -48,6 +49,13 @@ function wrap(i: number, n: number): number {
 function pickerRows(screen: Extract<Screen, { kind: 'picker' }>): number {
   if (screen.status === 'stopsFailed') return 2;
   return screen.stops.length + 1;
+}
+
+// nothing to announce while a fix is in flight: the stops will follow it
+export function pickerMessage(status: PickerStatus, stopCount: number): string | null {
+  if (status === 'loading') return 'Loading stops';
+  if (status === 'stopsFailed' || status === 'locating') return null;
+  return stopCount === 0 ? 'No stops found near you.' : null;
 }
 
 export function selectOn(screen: Screen): SelectTarget | null {
@@ -113,6 +121,11 @@ function step(state: State, action: Action): State {
         return { ...touched, screen: { ...screen, cursor: wrap(screen.cursor + action.delta, screen.routes.length + 1) } };
       }
       return { ...touched, index: wrap(state.index + action.delta, state.slots.length), screen: { kind: 'board' } };
+    case 'cursor': {
+      if (screen.kind !== 'picker') return touched;
+      const cursor = Math.max(0, Math.min(action.cursor, pickerRows(screen) - 1));
+      return { ...touched, screen: { ...screen, cursor } };
+    }
     case 'select':
       if (screen.kind === 'routes') {
         if (screen.cursor === screen.routes.length) return step(state, { type: 'saveSlot', at: action.at });
@@ -123,9 +136,10 @@ function step(state: State, action: Action): State {
     case 'toggleRoute': {
       if (screen.kind !== 'routes') return touched;
       const id = action.routeId;
-      if (!screen.routes.some(r => r.routeId === id)) return touched;
+      const cursor = screen.routes.findIndex(r => r.routeId === id);
+      if (cursor < 0) return touched;
       const chosen = screen.chosen.includes(id) ? screen.chosen.filter(r => r !== id) : [...screen.chosen, id];
-      return { ...touched, screen: { ...screen, chosen } };
+      return { ...touched, screen: { ...screen, chosen, cursor } };
     }
     case 'saveSlot': {
       if (screen.kind !== 'routes' || screen.chosen.length === 0) return touched;

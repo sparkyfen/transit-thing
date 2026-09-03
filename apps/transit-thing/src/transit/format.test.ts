@@ -1,5 +1,17 @@
 import { describe, expect, test } from 'bun:test';
-import { badgeColors, badgeLabel, clockTime, contrastRatio, countdown, countdownLabel, distanceLabel, minutesUntil, routeHex, rowTitle } from './format';
+import {
+  ambientTitle,
+  badgeColors,
+  badgeLabel,
+  clockTime,
+  contrastRatio,
+  countdown,
+  countdownLabel,
+  distanceLabel,
+  minutesUntil,
+  routeHex,
+  rowTitle,
+} from './format';
 
 const now = Date.UTC(2026, 8, 2, 20, 0, 0);
 const at = (min: number) => Math.floor(now / 1000) + min * 60;
@@ -21,8 +33,8 @@ describe('countdown', () => {
 describe('countdownLabel', () => {
   test('reads as a sentence for screen readers', () => {
     expect(countdownLabel('now')).toBe('Due now');
-    expect(countdownLabel('1')).toBe('in 1 minute');
-    expect(countdownLabel('2')).toBe('in 2 minutes');
+    expect(countdownLabel('1')).toBe('In 1 minute');
+    expect(countdownLabel('2')).toBe('In 2 minutes');
   });
 });
 
@@ -95,6 +107,9 @@ describe('badgeLabel', () => {
     expect(badgeLabel('Bainbridge Ferry')).toBeNull();
     expect(badgeLabel('Line 1A')).toBeNull();
   });
+  test('an empty name leaves the badge to the icon', () => {
+    expect(badgeLabel('')).toBeNull();
+  });
 });
 
 describe('rowTitle', () => {
@@ -103,6 +118,18 @@ describe('rowTitle', () => {
   });
   test('an unbadged route leads with its name', () => {
     expect(rowTitle('Bainbridge Ferry', 'Bainbridge Island')).toBe('Bainbridge Ferry · Bainbridge Island');
+  });
+  test('an empty name shows the headsign alone', () => {
+    expect(rowTitle('', 'Bainbridge Island')).toBe('Bainbridge Island');
+  });
+});
+
+describe('ambientTitle', () => {
+  test('a badged route reads "to" the headsign', () => {
+    expect(ambientTitle('240', 'Renton Newcastle')).toBe('to Renton Newcastle');
+  });
+  test('an unbadged route reads as its row title', () => {
+    expect(ambientTitle('Bainbridge Ferry', 'Bainbridge Island')).toBe('Bainbridge Ferry · Bainbridge Island');
   });
 });
 

@@ -9,7 +9,7 @@ export function countdown(arrivalTime: number, nowMs: number): string {
 
 export function countdownLabel(min: string): string {
   if (min === 'now') return 'Due now';
-  return min === '1' ? 'in 1 minute' : `in ${min} minutes`;
+  return min === '1' ? 'In 1 minute' : `In ${min} minutes`;
 }
 
 export function clockTime(epochSeconds: number): string {
@@ -76,9 +76,14 @@ const BADGE_MAX = 6;
 
 // a name longer than the badge can hold moves into the headsign column
 export function badgeLabel(name: string): string | null {
-  return name.length <= BADGE_MAX ? name : null;
+  return name.length > 0 && name.length <= BADGE_MAX ? name : null;
 }
 
 export function rowTitle(name: string, headsign: string): string {
-  return badgeLabel(name) ? headsign : `${name} · ${headsign}`;
+  return name && !badgeLabel(name) ? `${name} · ${headsign}` : headsign;
+}
+
+// the ambient phrase reads "to <headsign>" only when the badge already names the route
+export function ambientTitle(name: string, headsign: string): string {
+  return badgeLabel(name) ? `to ${headsign}` : rowTitle(name, headsign);
 }

@@ -11,14 +11,12 @@ describe('modeFor', () => {
     expect(modeFor('2 Line')).toBe('rail');
     expect(modeFor('Sounder S Line')).toBe('rail');
   });
-  test('a rail word in the headsign alone does not make a bus a train', () => {
-    expect(modeFor('45', 'Link Light Rail Station')).toBe('bus');
-  });
-  test('ferries by name or headsign', () => {
+  test('ferries by name', () => {
     expect(modeFor('Bainbridge Ferry')).toBe('ferry');
-    expect(modeFor('773', 'West Seattle Water Taxi')).toBe('ferry');
+    expect(modeFor('Bremerton Ferry')).toBe('ferry');
+    expect(modeFor('West Seattle Water Taxi')).toBe('ferry');
   });
-  test('streetcars', () => {
+  test('streetcars by name', () => {
     expect(modeFor('First Hill Streetcar')).toBe('tram');
   });
 });

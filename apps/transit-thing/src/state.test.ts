@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { IDLE_MS, reduce, selectOn, type State } from './state';
+import { IDLE_MS, pickerMessage, reduce, selectOn, type State } from './state';
 import type { Route, Stop } from './transit/types';
 
 const slot = (n: number) => ({ stopId: `s${n}`, stopName: `Stop ${n}`, routeIds: [`r${n}`] });
@@ -127,6 +127,36 @@ describe('locating', () => {
     const s = reduce(picker(), { type: 'stops', token: 1, stops: [far, near, mid] });
     expect(s.screen.kind === 'picker' && s.screen.stops.map(x => x.stopId)).toEqual(['far', 'near', 'mid']);
   });
+  test('a fix or a failure for another request is dropped', () => {
+    const s = reduce(picker(), { type: 'locating', token: 1 });
+    expect(reduce(s, { type: 'locateFailed', token: 2 })).toBe(s);
+    expect(reduce(s, { type: 'origin', token: 2, origin: { lat: 47.615, lon: -122.195 } })).toBe(s);
+    expect(reduce(base, { type: 'origin', token: 1, origin: { lat: 47.615, lon: -122.195 } }).origin).toBeNull();
+  });
+});
+
+describe('pickerMessage', () => {
+  test('says what the list is doing when it is empty', () => {
+    expect(pickerMessage('loading', 0)).toBe('Loading stops');
+    expect(pickerMessage('ready', 0)).toBe('No stops found near you.');
+    expect(pickerMessage('locateFailed', 0)).toBe('No stops found near you.');
+  });
+  test('stays quiet while locating, after a failed load, or with stops to show', () => {
+    expect(pickerMessage('locating', 0)).toBeNull();
+    expect(pickerMessage('stopsFailed', 0)).toBeNull();
+    expect(pickerMessage('ready', 2)).toBeNull();
+  });
+});
+
+describe('tapping a row', () => {
+  test('moves the picker cursor to the tapped row within range', () => {
+    expect(reduce(picker(), { type: 'cursor', cursor: 2, at: 1 }).screen).toMatchObject({ cursor: 2 });
+    expect(reduce(picker(), { type: 'cursor', cursor: 9, at: 1 }).screen).toMatchObject({ cursor: 2 });
+    expect(reduce(picker(), { type: 'cursor', cursor: -1, at: 1 }).screen).toMatchObject({ cursor: 0 });
+  });
+  test('does nothing on the board', () => {
+    expect(reduce(base, { type: 'cursor', cursor: 1, at: 1 }).screen.kind).toBe('board');
+  });
 });
 
 describe('picking a stop', () => {
@@ -155,12 +185,12 @@ describe('picking a stop', () => {
     expect(s.index).toBe(3);
     expect(s.slots[3]).toEqual({ stopId: 's9', stopName: 'Stop 9', routeIds: ['a', 'b'] });
   });
-  test('touch toggles a route by id without moving the cursor', () => {
+  test('touch toggles a route by id and moves the cursor to it', () => {
     let s = reduce(routesScreen(), { type: 'toggleRoute', routeId: 'b', at: 1 });
-    expect(s.screen).toMatchObject({ chosen: ['b'], cursor: 0 });
+    expect(s.screen).toMatchObject({ chosen: ['b'], cursor: 1 });
     s = reduce(s, { type: 'toggleRoute', routeId: 'b', at: 2 });
-    expect(s.screen).toMatchObject({ chosen: [] });
-    expect(reduce(s, { type: 'toggleRoute', routeId: 'nope', at: 3 }).screen).toMatchObject({ chosen: [] });
+    expect(s.screen).toMatchObject({ chosen: [], cursor: 1 });
+    expect(reduce(s, { type: 'toggleRoute', routeId: 'nope', at: 3 }).screen).toMatchObject({ chosen: [], cursor: 1 });
   });
   test('touch saves the chosen routes', () => {
     const s = reduce(reduce(routesScreen(), { type: 'toggleRoute', routeId: 'a', at: 1 }), { type: 'saveSlot', at: 2 });
