@@ -57,9 +57,10 @@ describe('distanceLabel', () => {
   });
   test('rounds short US distances to ten feet', () => {
     expect(distanceLabel(26, 'us')).toBe('90 ft');
-    expect(distanceLabel(1600, 'us')).toBe('5250 ft');
+    expect(distanceLabel(300, 'us')).toBe('980 ft');
   });
-  test('switches to miles once the rounded value reaches 5280 feet', () => {
+  test('switches to miles once the rounded value reaches 1000 feet', () => {
+    expect(distanceLabel(305, 'us')).toBe('0.2 mi');
     expect(distanceLabel(1609, 'us')).toBe('1.0 mi');
     expect(distanceLabel(1931, 'us')).toBe('1.2 mi');
   });

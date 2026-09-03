@@ -57,8 +57,8 @@ export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, now
       </header>
       <ol className="m-0 grid flex-1 list-none px-8 py-2" style={{ gridTemplateRows: `repeat(${perStop}, minmax(0, 1fr))` }}>
         {!hasFeed ? (
-          <li className="row-span-full self-center text-center text-title text-soft" role="status">
-            Waiting for arrivals
+          <li className="row-span-full self-center text-center text-title text-soft">
+            <span role="status">Waiting for arrivals.</span>
           </li>
         ) : trips.length === 0 ? (
           <li className="row-span-full self-center text-center text-title text-soft">No arrivals scheduled.</li>
@@ -99,7 +99,7 @@ export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, now
           </span>
           <span>Turn the dial for the next stop, press it to add one</span>
         </span>
-        <button className="border border-edge px-4 py-2 text-near" onClick={onAddStop}>
+        <button className="border border-soft px-4 py-2 text-near" onClick={onAddStop}>
           Add a stop
         </button>
       </footer>

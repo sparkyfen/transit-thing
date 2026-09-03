@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LOCATE_ROW, pickerMessage, RETRY_ROW, stopRow, type PickerStatus } from '../state';
+import { LOCATE_ROW, pickerMessage, RETRY_ROW, stopRow, type LoadStatus, type LocateStatus } from '../state';
 import { distanceLabel, rowTitle, type Units } from '../transit/format';
 import { haversine, type Origin } from '../transit/geo';
 import type { Route, Stop } from '../transit/types';
@@ -28,7 +28,10 @@ function rowClass(active: boolean): string {
 interface StopsProps {
   stops: Stop[];
   cursor: number;
-  status: PickerStatus;
+  load: LoadStatus;
+  locate: LocateStatus;
+  refreshFailed: boolean;
+  routesFailed: boolean;
   origin: Origin | null;
   units: Units;
   onLocate: () => void;
@@ -36,9 +39,14 @@ interface StopsProps {
   onPick: (stop: Stop, row: number) => void;
 }
 
-export function StopPicker({ stops, cursor, status, origin, units, onLocate, onRetry, onPick }: StopsProps) {
+export function StopPicker({ stops, cursor, load, locate, refreshFailed, routesFailed, origin, units, onLocate, onRetry, onPick }: StopsProps) {
   const rowProps = useCursorFocus(cursor);
-  const message = pickerMessage(status, stops.length);
+  const message = pickerMessage(load, locate, stops.length, origin !== null);
+  const alerts = [
+    refreshFailed ? "Couldn't refresh stops." : null,
+    locate === 'failed' ? "Couldn't get this device's location." : null,
+    routesFailed ? "Couldn't load routes for that stop. Try again." : null,
+  ].filter((a): a is string => a !== null);
   // the stop count is for screen readers only; sighted users see the list itself
   const visible = stops.length === 0 ? message : null;
   // a live region only announces text that arrives after it mounts, so it starts empty
@@ -55,8 +63,8 @@ export function StopPicker({ stops, cursor, status, origin, units, onLocate, onR
       </header>
       <ol className="m-0 flex min-h-0 flex-1 list-none flex-col overflow-y-auto px-8">
         <li>
-          <button {...rowProps(LOCATE_ROW)} className={rowClass(cursor === LOCATE_ROW)} onClick={onLocate} aria-disabled={status === 'locating'}>
-            <span className="text-row-lg">{status === 'locating' ? 'Finding your location' : 'Use my location'}</span>
+          <button {...rowProps(LOCATE_ROW)} className={rowClass(cursor === LOCATE_ROW)} onClick={onLocate} aria-disabled={locate === 'locating'}>
+            <span className="text-row-lg">{locate === 'locating' ? 'Finding your location' : 'Use my location'}</span>
           </button>
         </li>
         {visible ? (
@@ -64,7 +72,7 @@ export function StopPicker({ stops, cursor, status, origin, units, onLocate, onR
             {visible}
           </li>
         ) : null}
-        {status === 'stopsFailed' ? (
+        {load === 'failed' ? (
           <li>
             <p className="m-0 px-3 py-2 font-mono text-hint text-warn" role="alert">
               Couldn't load stops.
@@ -89,11 +97,11 @@ export function StopPicker({ stops, cursor, status, origin, units, onLocate, onR
       <div role="status" className="sr-only">
         {announced}
       </div>
-      {status === 'routesFailed' || status === 'locateFailed' ? (
-        <p className="m-0 px-8 py-2 font-mono text-hint text-warn" role="alert">
-          {status === 'locateFailed' ? "Couldn't get this device's location." : "Couldn't load routes for that stop. Try again."}
+      {alerts.map(alert => (
+        <p key={alert} className="m-0 px-8 py-2 font-mono text-hint text-warn" role="alert">
+          {alert}
         </p>
-      ) : null}
+      ))}
       <footer className="flex justify-between gap-6 border-t border-rule px-8 pt-3 pb-4 font-mono text-hint text-soft">
         <span>Turn the dial to move, press it to choose</span>
         <span>Back returns to the board</span>
@@ -159,8 +167,8 @@ export function RoutePicker({ stop, routes, cursor, chosen, onToggle, onSave }: 
               {...rowProps(saveRow)}
               aria-disabled={!canSave}
               aria-describedby="save-hint"
-              className={`border px-4 py-2 font-mono text-row-lg outline-none ${cursor === saveRow ? 'border-accent' : 'border-edge'} ${
-                !canSave ? 'text-soft' : cursor === saveRow ? 'bg-accent text-screen' : 'text-near'
+              className={`border px-4 py-2 font-mono text-row-lg outline-none ${cursor === saveRow ? 'border-accent' : 'border-soft'} ${
+                !canSave ? (cursor === saveRow ? 'bg-accent-soft text-soft' : 'text-soft') : cursor === saveRow ? 'bg-accent text-screen' : 'text-near'
               }`}
               onClick={onSave}>
               {saveLabel}

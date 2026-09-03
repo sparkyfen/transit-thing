@@ -44,7 +44,7 @@ export default function App() {
     return () => clearInterval(tick);
   }, [config.ambientIdle]);
 
-  // a list that fails before the socket opens is retried on every open, so a reject is not an error
+  // config is optional: a reject leaves the defaults in place, and the next open reads it again
   const loadConfig = useCallback(
     () =>
       client.config
@@ -64,10 +64,7 @@ export default function App() {
     if (e.type === 'open' || e.type === 'close' || e.type === 'connecting') setConnection(client.connectionState);
   }), [client, loadConfig]);
 
-  useEffect(() => {
-    void loadConfig();
-    return client.config.onChanged(c => setConfig(prev => applyConfig(prev, c.key, c.value)));
-  }, [client, loadConfig]);
+  useEffect(() => client.config.onChanged(c => setConfig(prev => applyConfig(prev, c.key, c.value))), [client]);
 
   useEffect(() => {
     const offs = state.slots.map(slot =>
@@ -100,7 +97,7 @@ export default function App() {
       const { token } = screen;
       if (target.kind === 'retry') return loadStops(token, origin);
       if (target.kind === 'locate') {
-        if (screen.status === 'locating') return;
+        if (screen.locate === 'locating') return;
         dispatch({ type: 'locating', token });
         const here = await locate(client.geo);
         if (!here) return dispatch({ type: 'locateFailed', token });
@@ -155,7 +152,10 @@ export default function App() {
       <StopPicker
         stops={screen.stops}
         cursor={screen.cursor}
-        status={screen.status}
+        load={screen.load}
+        locate={screen.locate}
+        refreshFailed={screen.refreshFailed}
+        routesFailed={screen.routesFailed}
         origin={state.origin}
         units={unitsFor(config.feed)}
         onLocate={() => tap(LOCATE_ROW, { kind: 'locate' })}

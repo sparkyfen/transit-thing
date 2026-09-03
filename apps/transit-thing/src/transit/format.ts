@@ -30,11 +30,13 @@ export function unitsFor(feed: string): Units {
 
 const FEET_PER_METER = 3.28084;
 const METERS_PER_MILE = 1609.344;
+// feet switch to miles at the same reading size as meters to kilometers
+const MAX_FEET = 1000;
 
 export function distanceLabel(meters: number, units: Units): string {
   if (units === 'us') {
     const feet = Math.round((meters * FEET_PER_METER) / 10) * 10;
-    if (feet < 5280) return `${feet} ft`;
+    if (feet < MAX_FEET) return `${feet} ft`;
     return `${(meters / METERS_PER_MILE).toFixed(1)} mi`;
   }
   const tens = Math.round(meters / 10) * 10;
