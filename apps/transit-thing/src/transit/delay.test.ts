@@ -34,7 +34,7 @@ describe('lateness', () => {
 });
 
 describe('showLateness', () => {
-  test('needs the daemon link and a live estimate', () => {
+  test('needs a fresh feed and a live estimate', () => {
     expect(showLateness(true, trip('a', 1000))).toBe(true);
     expect(showLateness(false, trip('a', 1000))).toBe(false);
     expect(showLateness(true, { ...trip('a', 1000), isRealtime: false })).toBe(false);

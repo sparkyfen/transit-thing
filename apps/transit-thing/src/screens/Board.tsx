@@ -37,11 +37,11 @@ export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, now
       </main>
     );
   }
-  const connected = connection === 'open';
   const feed = link?.status ?? null;
   const status = boardStatus(connection, updatedMs, link, nowMs);
-  const dim = !connected || feed === 'reconnecting';
-  const anyLive = connected && trips.some(t => t.isRealtime);
+  // a feed that is reconnecting is as stale as one with no daemon, so every live signal follows one flag
+  const fresh = connection === 'open' && feed !== 'reconnecting';
+  const anyLive = fresh && trips.some(t => t.isRealtime);
   return (
     <main ref={root} tabIndex={-1} className="flex h-full w-full flex-col bg-bg text-off-white outline-none">
       <header className="flex items-end justify-between gap-6 border-b border-rule px-8 pt-6 pb-3">
@@ -71,17 +71,17 @@ export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, now
         ) : (
           trips.map(trip => {
             const min = minutesUntil(trip.arrivalTime, nowMs);
-            const late = showLateness(connected, trip) ? lateness(trip, firstSeen) : null;
+            const late = showLateness(fresh, trip) ? lateness(trip, firstSeen) : null;
             return (
               <li key={trip.tripId} className="grid grid-cols-[auto_1fr_auto] items-center gap-5 border-b border-rule last:border-b-0">
                 <RouteBadge name={trip.routeName} color={trip.routeColor} size="lg" />
                 <div className="min-w-0 truncate text-row-lg text-near">{rowTitle(trip.routeName, trip.headsign)}</div>
                 <div className="flex items-center gap-3">
-                  <Countdown min={min} size="board" dim={dim} />
+                  <Countdown min={min} size="board" dim={!fresh} />
                   <Lateness value={late} />
                   <span className="flex w-[5.5rem] items-center justify-end gap-2 font-mono text-body tabular-nums text-soft">
                     {clockTime(trip.arrivalTime)}
-                    {connected ? (
+                    {fresh ? (
                       <span
                         className={`inline-block h-2 w-2 rounded-full ${trip.isRealtime ? 'bg-ok' : 'bg-transparent'}`}
                         role="img"

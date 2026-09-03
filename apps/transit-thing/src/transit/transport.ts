@@ -17,7 +17,7 @@ export interface Transport {
   open(url: string, handlers: SocketHandlers): Socket;
 }
 
-// a stops reply for a full box is a few KB; anything near this size is not the api
+// a stops reply for a full box is a few KB; anything near this size is not the api, and the cap bounds the parse cost
 export const MAX_BODY_BYTES = 256 * 1024;
 // the request budget is 45 s, and the client rpc has to outlive it to see the reply
 const REQUEST_TIMEOUT_MS = 45_000;
@@ -70,6 +70,22 @@ export function browserTransport(): Transport {
 }
 
 export function daemonTransport(client: BridgethingClient): Transport {
+  // the daemon drops every socket with its link, without a close event per socket, so one listener stands in while any is open
+  const open = new Set<(reason: string) => void>();
+  let offLink: (() => void) | null = null;
+  const track = (shutdown: (reason: string) => void) => {
+    open.add(shutdown);
+    offLink ??= client.on(e => {
+      if (e.type === 'close') [...open].forEach(s => s('daemon link lost'));
+    });
+  };
+  const untrack = (shutdown: (reason: string) => void) => {
+    open.delete(shutdown);
+    if (open.size === 0) {
+      offLink?.();
+      offLink = null;
+    }
+  };
   return {
     async getJson(url) {
       const res = await client.net.fetch(
@@ -90,8 +106,10 @@ export function daemonTransport(client: BridgethingClient): Transport {
         if (closed) return;
         closed = true;
         offs.forEach(off => off());
+        untrack(shutdown);
         if (reason !== null) handlers.onClose(reason);
       };
+      track(shutdown);
       const offs = [
         client.net.onWsMessage(m => {
           if (m.connectionId === connectionId && !closed && m.frame.type === 'text') handlers.onText(m.frame.data);
@@ -103,11 +121,14 @@ export function daemonTransport(client: BridgethingClient): Transport {
           if (m.connectionId === connectionId) shutdown(m.error.type);
         }),
       ];
-      void client.net.wsOpen({ connectionId, url, protocols: null, headers: null }).then(res => {
-        if (closed) return;
-        if (res.ok) handlers.onOpen();
-        else shutdown(res.kind === 'domain' ? res.error.error.type : 'daemon request failed');
-      });
+      void client.net.wsOpen({ connectionId, url, protocols: null, headers: null }).then(
+        res => {
+          if (closed) return;
+          if (res.ok) handlers.onOpen();
+          else shutdown(res.kind === 'domain' ? res.error.error.type : 'daemon request failed');
+        },
+        reason => shutdown(String(reason)),
+      );
       return {
         send: text => {
           if (!closed) void client.net.wsSend({ connectionId, frame: { type: 'text', data: text } });

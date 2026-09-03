@@ -13,9 +13,9 @@ export function lateness(trip: Trip, firstSeen: Map<string, number>): Lateness {
   return null;
 }
 
-// a scheduled time has no prediction to drift from, and a stale one while the daemon is away says nothing about now
-export function showLateness(connected: boolean, trip: Trip): boolean {
-  return connected && trip.isRealtime;
+// a scheduled time has no prediction to drift from, and a stale one while the feed is away says nothing about now
+export function showLateness(fresh: boolean, trip: Trip): boolean {
+  return fresh && trip.isRealtime;
 }
 
 // remembers the first predicted arrival per trip and forgets trips that left the feed

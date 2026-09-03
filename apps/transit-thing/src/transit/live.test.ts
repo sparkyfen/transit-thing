@@ -112,6 +112,19 @@ describe('liveSource.subscribe', () => {
     expect(JSON.parse(sockets[1]!.sent[0]!).event).toBe('schedule:subscribe');
   });
 
+  test('a base url changed in settings is used by the next dial', () => {
+    const { transport, sockets } = fakeTransport();
+    const t = fakeTimers();
+    let baseUrl = 'https://tt.horner.tj/';
+    const src = liveSource(transport, () => ({ ...config(), baseUrl }), t.timers);
+    src.subscribe(slot, () => {});
+    expect(sockets[0]!.url).toBe('wss://tt.horner.tj/');
+    baseUrl = 'https://transit.example/';
+    sockets[0]!.handlers.onClose('gone');
+    t.fire();
+    expect(sockets[1]!.url).toBe('wss://transit.example/');
+  });
+
   test('a removed status handler hears nothing more', () => {
     const { transport, sockets } = fakeTransport();
     const src = liveSource(transport, config, fakeTimers().timers);

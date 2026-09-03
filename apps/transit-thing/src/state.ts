@@ -6,6 +6,7 @@ export type LoadStatus = 'loading' | 'ready' | 'failed';
 export type LocateStatus = 'idle' | 'locating' | 'failed';
 // one alert shows at a time, the newest failure wins
 export type PickerAlert = 'refresh' | 'locate' | 'routes';
+export type FailReason = 'rateLimited' | 'failed';
 
 // load and locate fail independently: a bad fix must not hide the retry row, and a failed refresh must not drop the stops
 type PickerScreen = {
@@ -18,6 +19,8 @@ type PickerScreen = {
   load: LoadStatus;
   locate: LocateStatus;
   alert: PickerAlert | null;
+  // why the last stops or routes request failed, so the copy can say when the server asked for a pause
+  reason: FailReason;
 };
 
 type RoutesScreen = { kind: 'routes'; token: number; latestReq: number; stops: Stop[]; stop: Stop; routes: Route[]; cursor: number; chosen: string[] };
@@ -26,6 +29,8 @@ export type Screen = { kind: 'board' } | { kind: 'ambient' } | PickerScreen | Ro
 
 export interface State {
   slots: Slot[];
+  // keys of the slots settings last supplied, so a settings edit can remove or replace them and leave dial-added slots alone
+  configKeys: string[];
   index: number;
   screen: Screen;
   origin: Origin | null;
@@ -45,10 +50,10 @@ export type Action =
   | { type: 'openPicker'; token: number; at: number }
   | { type: 'stopsRequested'; token: number; reqId: number }
   | { type: 'stops'; token: number; reqId: number; stops: Stop[] }
-  | { type: 'stopsFailed'; token: number; reqId: number }
+  | { type: 'stopsFailed'; token: number; reqId: number; reason: FailReason }
   | { type: 'openRoutes'; token: number; reqId: number; stop: Stop; routes: Route[] }
   | { type: 'routesRequested'; token: number; reqId: number }
-  | { type: 'routesFailed'; token: number; reqId: number }
+  | { type: 'routesFailed'; token: number; reqId: number; reason: FailReason }
   | { type: 'locating'; token: number }
   | { type: 'locateFailed'; token: number }
   | { type: 'origin'; token: number; origin: Origin }
@@ -82,7 +87,7 @@ export function visibleCursor(screen: Pick<PickerScreen, 'cursor' | 'load' | 'st
 }
 
 function freshPicker(token: number, latestReq: number): PickerScreen {
-  return { kind: 'picker', token, latestReq, latestRoutesReq: 0, stops: [], cursor: 0, load: 'loading', locate: 'idle', alert: null };
+  return { kind: 'picker', token, latestReq, latestRoutesReq: 0, stops: [], cursor: 0, load: 'loading', locate: 'idle', alert: null, reason: 'failed' };
 }
 
 function clampCursor<S extends PickerScreen | RoutesScreen>(screen: S): S {
@@ -109,14 +114,18 @@ export function selectOn(screen: Screen): SelectTarget | null {
   return stop ? { kind: 'pickStop', stop } : null;
 }
 
-// settings come first, then whatever the dial added that settings do not name, so a reread never drops a stop
+// settings come first, then whatever the dial added that settings do not name
 export function mergeSlots(fromConfig: Slot[], current: Slot[]): Slot[] {
   const keys = new Set(fromConfig.map(slotKey));
   return [...fromConfig, ...current.filter(s => !keys.has(slotKey(s)))];
 }
 
 export function sameSlots(a: Slot[], b: Slot[]): boolean {
-  return a.length === b.length && a.every((s, i) => slotKey(s) === slotKey(b[i]!));
+  return sameKeys(a.map(slotKey), b.map(slotKey));
+}
+
+function sameKeys(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((k, i) => k === b[i]);
 }
 
 export function sortByDistance(stops: Stop[], origin: Origin | null): Stop[] {
@@ -151,14 +160,14 @@ function step(state: State, action: Action): State {
     }
     case 'stopsFailed':
       if (screen.kind !== 'picker' || screen.token !== action.token || screen.latestReq !== action.reqId) return state;
-      if (screen.stops.length > 0) return { ...state, screen: { ...screen, alert: 'refresh' } };
-      return { ...state, screen: clampCursor({ ...screen, load: 'failed' }) };
+      if (screen.stops.length > 0) return { ...state, screen: { ...screen, alert: 'refresh', reason: action.reason } };
+      return { ...state, screen: clampCursor({ ...screen, load: 'failed', reason: action.reason }) };
     case 'routesRequested':
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;
       return { ...state, screen: { ...screen, latestRoutesReq: action.reqId, alert: screen.alert === 'routes' ? null : screen.alert } };
     case 'routesFailed':
       if (screen.kind !== 'picker' || screen.token !== action.token || screen.latestRoutesReq !== action.reqId) return state;
-      return { ...state, screen: { ...screen, alert: 'routes' } };
+      return { ...state, screen: { ...screen, alert: 'routes', reason: action.reason } };
     case 'openRoutes':
       if (screen.kind !== 'picker' || screen.token !== action.token || screen.latestRoutesReq !== action.reqId) return state;
       return {
@@ -172,12 +181,14 @@ function step(state: State, action: Action): State {
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;
       return { ...state, screen: { ...screen, locate: 'failed', alert: 'locate' } };
     case 'slots': {
-      const slots = mergeSlots(action.slots, state.slots);
-      if (sameSlots(slots, state.slots)) return state;
+      const deviceAdded = state.slots.filter(s => !state.configKeys.includes(slotKey(s)));
+      const slots = mergeSlots(action.slots, deviceAdded);
+      const configKeys = action.slots.map(slotKey);
+      if (sameSlots(slots, state.slots) && sameKeys(configKeys, state.configKeys)) return state;
       const current = state.slots[state.index];
       const kept = current ? slots.findIndex(s => slotKey(s) === slotKey(current)) : -1;
       const index = kept >= 0 ? kept : Math.min(state.index, Math.max(0, slots.length - 1));
-      return { ...state, slots, index };
+      return { ...state, slots, configKeys, index };
     }
     case 'origin':
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;

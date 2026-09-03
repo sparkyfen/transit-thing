@@ -27,7 +27,8 @@ export function boardStatus(connection: Connection, updatedMs: number | null, li
   const feed = link?.status ?? null;
   if (connection === 'open') {
     if (feed === 'reconnecting') return updatedMs === null ? null : { text: `Reconnecting, as of ${clockTime(Math.floor(updatedMs / 1000))}`, tone: 'notice' };
-    if (link?.recoveredAt !== null && link?.recoveredAt !== undefined && nowMs - link.recoveredAt < RECOVERED_MS) return { text: 'Up to date', tone: 'soft' };
+    const recoveredAt = link?.recoveredAt ?? null;
+    if (recoveredAt !== null && nowMs - recoveredAt < RECOVERED_MS) return { text: 'Up to date', tone: 'soft' };
     return null;
   }
   if (connection === 'connecting' && updatedMs === null) return { text: 'Connecting', tone: 'soft' };

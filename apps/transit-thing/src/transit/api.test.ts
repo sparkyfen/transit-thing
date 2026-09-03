@@ -78,8 +78,9 @@ describe('parseServerMessage', () => {
     expect(parseTrip({ ...trip, arrivalTime: '1788392700' })).toBeNull();
     expect(parseTrip({ ...trip, arrivalTime: null })).toBeNull();
     expect(parseTrip({ ...trip, arrivalTime: Infinity })).toBeNull();
-    expect(parseTrip({ ...trip, departureTime: '1788392700' })).toBeNull();
-    expect(parseTrip({ ...trip, departureTime: null })).toBeNull();
+    expect(parseTrip({ ...trip, departureTime: '1788392700' })?.departureTime).toBe(trip.arrivalTime);
+    expect(parseTrip({ ...trip, departureTime: null })?.departureTime).toBe(trip.arrivalTime);
+    expect(parseTrip({ ...trip, departureTime: 1788392760 })?.departureTime).toBe(1788392760);
     expect(parseTrip({ ...trip, delaySeconds: '150' })?.delaySeconds).toBeUndefined();
     expect(parseTrip({ ...trip, delaySeconds: null })?.delaySeconds).toBeUndefined();
     expect(parseTrip({ ...trip, delaySeconds: NaN })?.delaySeconds).toBeUndefined();
@@ -93,6 +94,17 @@ describe('parseServerMessage', () => {
     expect(parseServerMessage(JSON.stringify({ event: 'exception' }))).toEqual({ kind: 'error', message: 'server error' });
     expect(parseServerMessage('not json').kind).toBe('error');
     expect(parseServerMessage(JSON.stringify({ event: 'other' })).kind).toBe('ignore');
+  });
+  test('names are cut to 80 characters and a schedule stops at 50 trips', () => {
+    const long = 'x'.repeat(200);
+    expect(parseTrip({ ...trip, routeName: long, stopName: long, headsign: long })).toMatchObject({
+      routeName: 'x'.repeat(80),
+      stopName: 'x'.repeat(80),
+      headsign: 'x'.repeat(80),
+    });
+    const trips = Array.from({ length: 51 }, (_, i) => ({ ...trip, tripId: `t${i}` }));
+    const msg = parseServerMessage(JSON.stringify({ event: 'schedule', data: { trips } }));
+    expect(msg.kind === 'schedule' && msg.trips).toHaveLength(50);
   });
   test('a missing route color stays null', () => {
     expect(parseTrip({ ...trip, routeColor: null })?.routeColor).toBeNull();

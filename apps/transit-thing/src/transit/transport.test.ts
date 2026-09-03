@@ -20,23 +20,27 @@ interface WsErrorEvent {
 const encode = (text: string) => new TextEncoder().encode(text);
 
 // the transport only needs the net surface, so the fake is a structural object cast to the client type
-function fakeClient(opts: { fetch?: { status: number; body: Uint8Array } | 'fail'; open?: 'ok' | 'fail' } = {}) {
+function fakeClient(opts: { fetch?: { status: number; body: Uint8Array } | 'fail'; open?: 'ok' | 'fail' | 'reject' } = {}) {
   const messages = new Set<Listener<WsMessage>>();
   const closes = new Set<Listener<WsClosed>>();
   const errors = new Set<Listener<WsErrorEvent>>();
+  const links = new Set<Listener<{ type: string }>>();
   const sent: { connectionId: string; text: string }[] = [];
   const closed: string[] = [];
   const opened: string[] = [];
+  const fetched: { request: Record<string, unknown>; options: Record<string, unknown> | undefined }[] = [];
   const net = {
     onWsMessage: (h: Listener<WsMessage>) => (messages.add(h), () => messages.delete(h)),
     onWsClosed: (h: Listener<WsClosed>) => (closes.add(h), () => closes.delete(h)),
     onWsErrorEvent: (h: Listener<WsErrorEvent>) => (errors.add(h), () => errors.delete(h)),
-    fetch: async () => {
+    fetch: async (req: { request: Record<string, unknown> }, options?: Record<string, unknown>) => {
+      fetched.push({ request: req.request, options });
       if (opts.fetch === 'fail' || !opts.fetch) return { ok: false, kind: 'domain', error: { error: { type: 'timeout' } } };
       return { ok: true, response: { response: { status: opts.fetch.status, headers: [], body: opts.fetch.body } } };
     },
     wsOpen: async (req: { connectionId: string }) => {
       opened.push(req.connectionId);
+      if (opts.open === 'reject') throw new Error('rpc timeout');
       return opts.open === 'fail' ? { ok: false, kind: 'domain', error: { error: { type: 'connectFailed', data: { reason: 'no' } } } } : { ok: true, response: { acceptedProtocol: null } };
     },
     wsSend: async (req: { connectionId: string; frame: { type: 'text'; data: string } }) => {
@@ -46,13 +50,17 @@ function fakeClient(opts: { fetch?: { status: number; body: Uint8Array } | 'fail
       closed.push(req.connectionId);
     },
   };
-  const client = { net } as unknown as BridgethingClient;
+  const on = (h: Listener<{ type: string }>) => (links.add(h), () => links.delete(h));
+  const client = { net, on } as unknown as BridgethingClient;
   return {
     client,
     sent,
     closed,
     opened,
+    fetched,
     listeners: () => messages.size + closes.size + errors.size,
+    linkListeners: () => links.size,
+    link: (type: string) => [...links].forEach(h => h({ type })),
     message: (m: WsMessage) => messages.forEach(h => h(m)),
     close: (m: WsClosed) => closes.forEach(h => h(m)),
     error: (m: WsErrorEvent) => errors.forEach(h => h(m)),
@@ -96,6 +104,42 @@ describe('daemonTransport sockets', () => {
     await tick();
     expect(events).toEqual(['close:connectFailed']);
     expect(fake.listeners()).toBe(0);
+  });
+
+  test('a rejected open rpc reports a close and drops every listener', async () => {
+    const fake = fakeClient({ open: 'reject' });
+    const { events, handlers } = recorder();
+    daemonTransport(fake.client).open('wss://tt.horner.tj/', handlers);
+    await tick();
+    expect(events).toEqual(['close:Error: rpc timeout']);
+    expect(fake.listeners()).toBe(0);
+    expect(fake.linkListeners()).toBe(0);
+  });
+
+  test('losing the daemon link closes every open socket and the link listener goes with the last socket', async () => {
+    const fake = fakeClient();
+    const transport = daemonTransport(fake.client);
+    const a = recorder();
+    const b = recorder();
+    const c = recorder();
+    transport.open('wss://tt.horner.tj/', a.handlers);
+    transport.open('wss://tt.horner.tj/', b.handlers);
+    const third = transport.open('wss://tt.horner.tj/', c.handlers);
+    await tick();
+    expect(fake.linkListeners()).toBe(1);
+    third.close();
+    expect(fake.linkListeners()).toBe(1);
+    fake.link('connecting');
+    expect(a.events).toEqual(['open']);
+    fake.link('close');
+    expect(a.events).toEqual(['open', 'close:daemon link lost']);
+    expect(b.events).toEqual(['open', 'close:daemon link lost']);
+    expect(c.events).toEqual(['open']);
+    expect(fake.listeners()).toBe(0);
+    expect(fake.linkListeners()).toBe(0);
+    expect(fake.closed).toEqual([fake.opened[2]]);
+    fake.link('close');
+    expect(a.events).toHaveLength(2);
   });
 
   test('a close from the daemon runs every unsubscribe and later events are ignored', async () => {
@@ -145,6 +189,16 @@ describe('daemonTransport.getJson', () => {
   test('decodes a byte body as json', async () => {
     const fake = fakeClient({ fetch: { status: 200, body: encode('[{"stopId":"a"}]') } });
     expect(await daemonTransport(fake.client).getJson('https://tt.horner.tj/stops')).toEqual({ status: 200, body: [{ stopId: 'a' }] });
+  });
+  test('asks for json without following redirects, and the rpc outlives the request budget', async () => {
+    const fake = fakeClient({ fetch: { status: 200, body: encode('[]') } });
+    await daemonTransport(fake.client).getJson('https://tt.horner.tj/stops');
+    expect(fake.fetched).toEqual([
+      {
+        request: { url: 'https://tt.horner.tj/stops', method: 'GET', headers: [{ name: 'accept', value: 'application/json' }], body: null, timeoutMs: 45_000, redirect: 'manual' },
+        options: { timeoutMs: 50_000 },
+      },
+    ]);
   });
   test('malformed bytes give a null body', async () => {
     const fake = fakeClient({ fetch: { status: 200, body: new Uint8Array([0xff, 0x7b]) } });

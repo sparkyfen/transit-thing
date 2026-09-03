@@ -10,6 +10,8 @@ export const ID = /^[A-Za-z0-9:_.-]{1,64}$/;
 const MAX_NAME = 80;
 const MAX_STOPS = 200;
 const MAX_ROUTES = 100;
+// perStop caps at 4 per pair and a slot holds at most 25 pairs, so a schedule never needs more rows than this
+const MAX_TRIPS = 50;
 
 // the fix snaps to the center of a 0.01 degree cell (about 1 km) before the box is built, so the request
 // only tells the server which cell the device is in, and every fix inside the cell sends the same box;
@@ -74,8 +76,9 @@ function name(v: unknown, fallback: string): string {
 export function parseTrip(raw: unknown): Trip | null {
   if (!isRecord(raw)) return null;
   const arrivalTime = num(raw.arrivalTime);
-  const departureTime = num(raw.departureTime);
-  if (arrivalTime === undefined || departureTime === undefined) return null;
+  if (arrivalTime === undefined) return null;
+  // the board only reads arrivals; a missing departure falls back rather than dropping the trip
+  const departureTime = num(raw.departureTime) ?? arrivalTime;
   const tripId = str(raw.tripId);
   const stopId = str(raw.stopId);
   const routeId = str(raw.routeId);
@@ -84,10 +87,10 @@ export function parseTrip(raw: unknown): Trip | null {
     tripId,
     stopId,
     routeId,
-    routeName: str(raw.routeName),
+    routeName: name(raw.routeName, ''),
     routeColor: typeof raw.routeColor === 'string' ? raw.routeColor : null,
-    stopName: str(raw.stopName),
-    headsign: str(raw.headsign),
+    stopName: name(raw.stopName, ''),
+    headsign: name(raw.headsign, ''),
     arrivalTime,
     departureTime,
     isRealtime: raw.isRealtime === true,
@@ -106,7 +109,7 @@ export function parseServerMessage(text: string): ServerMessage {
   if (msg.event === 'heartbeat') return { kind: 'heartbeat' };
   if (msg.event === 'schedule') {
     const data = isRecord(msg.data) ? msg.data : {};
-    const raw = Array.isArray(data.trips) ? data.trips : [];
+    const raw = Array.isArray(data.trips) ? data.trips.slice(0, MAX_TRIPS) : [];
     return { kind: 'schedule', trips: raw.map(parseTrip).filter((t): t is Trip => t !== null) };
   }
   if (msg.event === 'error' || msg.status === 'error' || msg.event === 'exception') {

@@ -1,12 +1,13 @@
 import { BridgethingClient } from '@bridgething/client';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { applyConfig, DEFAULT_CONFIG, parseSlots, type Config } from './config';
+import { applyConfig, DEFAULT_CONFIG, type Config } from './config';
 import { daemonUrl } from './daemon';
+import { DIRECT, FAKE_FIX, SEED_SLOTS, USE_FIXTURES } from './devFlags';
 import { useControls } from './hooks/useControls';
 import { Ambient } from './screens/Ambient';
 import { Board } from './screens/Board';
 import { RoutePicker, StopPicker } from './screens/Picker';
-import { LOCATE_ROW, reduce, RETRY_ROW, sameSlots, selectOn, type Action, type SelectTarget, type State } from './state';
+import { LOCATE_ROW, reduce, RETRY_ROW, selectOn, type Action, type SelectTarget, type State } from './state';
 import { rememberFirstSeen } from './transit/delay';
 import { FIXTURE_SLOTS, fixtureSource } from './transit/fixtures';
 import { liveSource, type LiveSource } from './transit/live';
@@ -26,20 +27,9 @@ interface Feed {
   firstSeen: Map<string, number>;
 }
 
-// dev flags: ?fixtures runs on canned data, ?direct talks to the api from the browser instead of through the phone
-const flags = new URLSearchParams(typeof location === 'undefined' ? '' : location.search);
-const USE_FIXTURES = import.meta.env.DEV && flags.has('fixtures');
-const DIRECT = import.meta.env.DEV && flags.has('direct');
-// ?slots=<json> seeds the board and ?at=lat,lon stands in for the phone's fix, both dev only
-const SEED_SLOTS = import.meta.env.DEV ? parseSlots(flags.get('slots') ?? '') : null;
-const FAKE_FIX = ((): Origin | null => {
-  if (!import.meta.env.DEV || !flags.has('at')) return null;
-  const [lat, lon] = (flags.get('at') ?? '').split(',').map(Number);
-  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat: lat!, lon: lon! } : null;
-})();
-
 const initial: State = {
   slots: SEED_SLOTS ?? (USE_FIXTURES ? FIXTURE_SLOTS : []),
+  configKeys: [],
   index: 0,
   screen: { kind: 'board' },
   origin: null,
@@ -110,12 +100,8 @@ export default function App() {
 
   useEffect(() => client.config.onChanged(c => setConfig(prev => applyConfig(prev, c.key, c.value))), [client]);
 
-  // every reconnect rereads settings into a fresh array; only a changed list reaches the reducer
-  const seenSlots = useRef<Slot[] | null>(null);
   useEffect(() => {
-    if (!config.slots || (seenSlots.current && sameSlots(seenSlots.current, config.slots))) return;
-    seenSlots.current = config.slots;
-    dispatch({ type: 'slots', slots: config.slots });
+    if (config.slots) dispatch({ type: 'slots', slots: config.slots });
   }, [config.slots]);
 
   useEffect(() => {
@@ -201,6 +187,7 @@ export default function App() {
         load={screen.load}
         locate={screen.locate}
         alert={screen.alert}
+        reason={screen.reason}
         origin={state.origin}
         units={unitsFor(config.feed)}
         host={new URL(config.apiBaseUrl).host}

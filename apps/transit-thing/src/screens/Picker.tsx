@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LOCATE_ROW, pickerMessage, RETRY_ROW, stopRow, visibleCursor, type LoadStatus, type LocateStatus, type PickerAlert } from '../state';
+import { LOCATE_ROW, pickerMessage, RETRY_ROW, stopRow, visibleCursor, type FailReason, type LoadStatus, type LocateStatus, type PickerAlert } from '../state';
 import { distanceLabel, rowTitle, type Units } from '../transit/format';
 import { haversine, type Origin } from '../transit/geo';
 import type { Route, Stop } from '../transit/types';
@@ -36,6 +36,12 @@ const ALERTS: Record<PickerAlert, string> = {
   locate: "Couldn't get this device's location.",
   routes: "Couldn't load routes for that stop. Try again.",
 };
+const RATE_LIMITED = 'Too many requests. Try again in a minute.';
+
+export function alertText(alert: PickerAlert | null, reason: FailReason): string {
+  if (!alert) return '';
+  return alert !== 'locate' && reason === 'rateLimited' ? RATE_LIMITED : ALERTS[alert];
+}
 
 interface StopsProps {
   stops: Stop[];
@@ -43,6 +49,7 @@ interface StopsProps {
   load: LoadStatus;
   locate: LocateStatus;
   alert: PickerAlert | null;
+  reason: FailReason;
   origin: Origin | null;
   units: Units;
   // the server that receives the location request, named so the disclosure says who gets it
@@ -52,7 +59,7 @@ interface StopsProps {
   onPick: (stop: Stop, row: number) => void;
 }
 
-export function StopPicker({ stops, cursor: stored, load, locate, alert, origin, units, host, onLocate, onRetry, onPick }: StopsProps) {
+export function StopPicker({ stops, cursor: stored, load, locate, alert, reason, origin, units, host, onLocate, onRetry, onPick }: StopsProps) {
   const cursor = visibleCursor({ cursor: stored, load, stops });
   const rowProps = useCursorFocus(cursor);
   const message = pickerMessage(load, stops.length, origin !== null);
@@ -66,9 +73,9 @@ export function StopPicker({ stops, cursor: stored, load, locate, alert, origin,
       <header className="px-8 pt-6 pb-2">
         <div className="font-mono text-hint tracking-[0.25em] text-soft uppercase">{origin ? 'Stops near you' : 'Stops'}</div>
         <h1 className="m-0 font-display text-screen-title font-medium tracking-display">Pick a stop</h1>
-        <p className="m-0 mt-1 text-hint text-soft">
-          Uses this device's location once to find nearby stops. Sends an area around you to {host}, the transit server in settings. Transit Thing does not
-          store it.
+        <p className="m-0 mt-1 max-w-[72ch] text-hint text-soft">
+          Uses this device's location once to find nearby stops. Sends an area around you to {host}, the transit server in settings. Transit&nbsp;Thing does not
+          store your location.
         </p>
       </header>
       <ol className="m-0 flex min-h-0 flex-1 list-none flex-col overflow-y-auto px-8">
@@ -85,7 +92,7 @@ export function StopPicker({ stops, cursor: stored, load, locate, alert, origin,
         {load === 'failed' ? (
           <li>
             <p className="m-0 py-2 font-mono text-hint text-warn" role="alert">
-              Couldn't load stops.
+              {reason === 'rateLimited' ? RATE_LIMITED : "Couldn't load stops."}
             </p>
             <button {...rowProps(RETRY_ROW)} className={rowClass(cursor === RETRY_ROW)} onClick={onRetry}>
               <span className="text-row-lg">Try again</span>
@@ -108,7 +115,7 @@ export function StopPicker({ stops, cursor: stored, load, locate, alert, origin,
         {announced}
       </div>
       <p className="m-0 h-[2.125rem] px-8 py-2 font-mono text-hint leading-[1.125rem] text-warn" role="alert">
-        {alert ? ALERTS[alert] : ''}
+        {alertText(alert, reason)}
       </p>
       <footer className="flex justify-between gap-6 border-t border-rule px-8 pt-3 pb-4 font-mono text-hint text-soft">
         <span>Turn the dial to move, press it to choose</span>
