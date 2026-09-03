@@ -1,4 +1,5 @@
 import { haversine, type Origin } from './transit/geo';
+import { slotKey } from './transit/trips';
 import type { Route, Slot, Stop } from './transit/types';
 
 export type LoadStatus = 'loading' | 'ready' | 'failed';
@@ -19,11 +20,9 @@ type PickerScreen = {
   alert: PickerAlert | null;
 };
 
-export type Screen =
-  | { kind: 'board' }
-  | { kind: 'ambient' }
-  | PickerScreen
-  | { kind: 'routes'; token: number; latestReq: number; stops: Stop[]; stop: Stop; routes: Route[]; cursor: number; chosen: string[] };
+type RoutesScreen = { kind: 'routes'; token: number; latestReq: number; stops: Stop[]; stop: Stop; routes: Route[]; cursor: number; chosen: string[] };
+
+export type Screen = { kind: 'board' } | { kind: 'ambient' } | PickerScreen | RoutesScreen;
 
 export interface State {
   slots: Slot[];
@@ -69,17 +68,24 @@ export const RETRY_ROW = 1;
 export const stopRow = (i: number) => i + 1;
 const stopIndex = (cursor: number) => cursor - 1;
 
-function pickerRows(screen: PickerScreen): number {
+// routes rows: the routes, then the save row
+function rowCount(screen: PickerScreen | RoutesScreen): number {
+  if (screen.kind === 'routes') return screen.routes.length + 1;
   if (screen.load === 'failed') return RETRY_ROW + 1;
   return stopRow(screen.stops.length);
+}
+
+// while a retry is loading the stored cursor waits on the retry row, which is not on screen, so focus sits on the location row
+export function visibleCursor(screen: Pick<PickerScreen, 'cursor' | 'load' | 'stops'>): number {
+  return screen.load === 'loading' && screen.stops.length === 0 ? LOCATE_ROW : screen.cursor;
 }
 
 function freshPicker(token: number, latestReq: number): PickerScreen {
   return { kind: 'picker', token, latestReq, latestRoutesReq: 0, stops: [], cursor: 0, load: 'loading', locate: 'idle', alert: null };
 }
 
-function clampCursor(screen: PickerScreen): PickerScreen {
-  return { ...screen, cursor: Math.max(0, Math.min(screen.cursor, pickerRows(screen) - 1)) };
+function clampCursor<S extends PickerScreen | RoutesScreen>(screen: S): S {
+  return { ...screen, cursor: Math.max(0, Math.min(screen.cursor, rowCount(screen) - 1)) };
 }
 
 // the count stands while a fix is in flight so a failed fix does not announce it again
@@ -164,18 +170,14 @@ function step(state: State, action: Action): State {
       return { ...touched, index, screen: { kind: 'board' } };
     }
     case 'turn':
-      if (screen.kind === 'picker') {
-        return { ...touched, screen: { ...screen, cursor: wrap(screen.cursor + action.delta, pickerRows(screen)) } };
-      }
-      if (screen.kind === 'routes') {
-        return { ...touched, screen: { ...screen, cursor: wrap(screen.cursor + action.delta, screen.routes.length + 1) } };
+      // the retry window has one row on screen, so there is nowhere for a turn to go
+      if (screen.kind === 'picker' && screen.load === 'loading') return touched;
+      if (screen.kind === 'picker' || screen.kind === 'routes') {
+        return { ...touched, screen: { ...screen, cursor: wrap(screen.cursor + action.delta, rowCount(screen)) } };
       }
       return { ...touched, index: wrap(state.index + action.delta, state.slots.length), screen: { kind: 'board' } };
     case 'cursor':
-      if (screen.kind === 'picker') return { ...touched, screen: clampCursor({ ...screen, cursor: action.cursor }) };
-      if (screen.kind === 'routes') {
-        return { ...touched, screen: { ...screen, cursor: Math.max(0, Math.min(action.cursor, screen.routes.length)) } };
-      }
+      if (screen.kind === 'picker' || screen.kind === 'routes') return { ...touched, screen: clampCursor({ ...screen, cursor: action.cursor }) };
       return touched;
     case 'select':
       if (screen.kind === 'routes') {
@@ -195,6 +197,8 @@ function step(state: State, action: Action): State {
     case 'saveSlot': {
       if (screen.kind !== 'routes' || screen.chosen.length === 0) return touched;
       const slot: Slot = { stopId: screen.stop.stopId, stopName: screen.stop.name, routeIds: screen.chosen };
+      const existing = state.slots.findIndex(s => slotKey(s) === slotKey(slot));
+      if (existing >= 0) return { ...touched, index: existing, screen: { kind: 'board' } };
       const slots = [...state.slots, slot];
       return { ...touched, slots, index: slots.length - 1, screen: { kind: 'board' } };
     }

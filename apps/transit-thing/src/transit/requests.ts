@@ -2,7 +2,7 @@ import type { Action } from '../state';
 import type { Origin } from './geo';
 import type { Stop, TransitSource } from './types';
 
-interface Request {
+interface StopsRequest {
   dispatch: (action: Action) => void;
   source: Pick<TransitSource, 'stopsNear'>;
   token: number;
@@ -28,7 +28,7 @@ export async function requestRoutes({ dispatch, source, token, reqId, stop }: Ro
   }
 }
 
-export async function requestStops({ dispatch, source, token, reqId, origin }: Request): Promise<void> {
+export async function requestStops({ dispatch, source, token, reqId, origin }: StopsRequest): Promise<void> {
   dispatch({ type: 'stopsRequested', token, reqId });
   try {
     const stops = await source.stopsNear(origin);

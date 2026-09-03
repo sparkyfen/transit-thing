@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LOCATE_ROW, pickerMessage, RETRY_ROW, stopRow, type LoadStatus, type LocateStatus, type PickerAlert } from '../state';
+import { LOCATE_ROW, pickerMessage, RETRY_ROW, stopRow, visibleCursor, type LoadStatus, type LocateStatus, type PickerAlert } from '../state';
 import { distanceLabel, rowTitle, type Units } from '../transit/format';
 import { haversine, type Origin } from '../transit/geo';
 import type { Route, Stop } from '../transit/types';
@@ -50,7 +50,8 @@ interface StopsProps {
   onPick: (stop: Stop, row: number) => void;
 }
 
-export function StopPicker({ stops, cursor, load, locate, alert, origin, units, onLocate, onRetry, onPick }: StopsProps) {
+export function StopPicker({ stops, cursor: stored, load, locate, alert, origin, units, onLocate, onRetry, onPick }: StopsProps) {
+  const cursor = visibleCursor({ cursor: stored, load, stops });
   const rowProps = useCursorFocus(cursor);
   const message = pickerMessage(load, stops.length, origin !== null);
   // the stop count is for screen readers only; sighted users see the list itself

@@ -10,7 +10,7 @@ import { LOCATE_ROW, reduce, RETRY_ROW, selectOn, type Action, type SelectTarget
 import { FIXTURE_SLOTS, fixtureSource } from './transit/fixtures';
 import { unitsFor } from './transit/format';
 import { locate, type Origin } from './transit/geo';
-import { requestRoutes, requestStops } from './transit/loadStops';
+import { requestRoutes, requestStops } from './transit/requests';
 import { dataAsOf } from './transit/status';
 import { everySlotHasFeed, forSlot, nextAcrossSlots, slotKey, soonestUpcoming } from './transit/trips';
 import type { Slot, Trip } from './transit/types';

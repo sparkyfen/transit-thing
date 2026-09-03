@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { IDLE_MS, pickerMessage, reduce, selectOn, type State } from './state';
+import { IDLE_MS, LOCATE_ROW, pickerMessage, reduce, selectOn, visibleCursor, type State } from './state';
 import type { Route, Stop } from './transit/types';
 
 const slot = (n: number) => ({ stopId: `s${n}`, stopName: `Stop ${n}`, routeIds: [`r${n}`] });
@@ -115,6 +115,19 @@ describe('loading stops', () => {
     expect(selectOn(s.screen)).toBeNull();
     expect(reduce(s, { type: 'stops', token: 1, reqId: 2, stops: [stop] }).screen).toMatchObject({ load: 'ready', stops: [stop], cursor: 1 });
     expect(reduce(s, { type: 'stops', token: 1, reqId: 2, stops: [] }).screen).toMatchObject({ load: 'ready', cursor: 0 });
+  });
+  test('the retry window shows the cursor on the location row and ignores the dial', () => {
+    const failed = reduce(opened(), { type: 'stopsFailed', token: 1, reqId: 1 });
+    const onRetry = reduce(failed, { type: 'turn', delta: 1, at: 1 });
+    const s = reduce(onRetry, { type: 'stopsRequested', token: 1, reqId: 2 });
+    expect(s.screen).toMatchObject({ load: 'loading', stops: [], cursor: 1 });
+    expect(s.screen.kind === 'picker' && visibleCursor(s.screen)).toBe(LOCATE_ROW);
+    expect(reduce(s, { type: 'turn', delta: 1, at: 2 }).screen).toMatchObject({ cursor: 1 });
+    expect(reduce(s, { type: 'turn', delta: -1, at: 2 }).screen).toMatchObject({ cursor: 1 });
+    expect(selectOn(s.screen)).toBeNull();
+    const moved = reduce(picker(), { type: 'turn', delta: 1, at: 3 });
+    expect(moved.screen.kind === 'picker' && visibleCursor(moved.screen)).toBe(1);
+    expect(reduce(opened(), { type: 'turn', delta: 1, at: 4 }).screen).toMatchObject({ cursor: 0 });
   });
   test('a failed retry leaves the cursor on the retry row', () => {
     const failed = reduce(opened(), { type: 'stopsFailed', token: 1, reqId: 1 });
@@ -248,7 +261,6 @@ describe('pickerMessage', () => {
   test('says what the list is doing when it is empty', () => {
     expect(pickerMessage('loading', 0, false)).toBe('Loading stops.');
     expect(pickerMessage('ready', 0, false)).toBe('No stops found.');
-    expect(pickerMessage('ready', 0, false)).toBe('No stops found.');
   });
   test('counts the stops once they are in', () => {
     expect(pickerMessage('ready', 1, false)).toBe('1 stop found.');
@@ -259,8 +271,9 @@ describe('pickerMessage', () => {
     expect(pickerMessage('ready', 2, true)).toBe('2 stops found, closest first.');
   });
   test('keeps the count while locating so a failed fix does not repeat it', () => {
-    expect(pickerMessage('ready', 2, false)).toBe('2 stops found.');
-    expect(pickerMessage('ready', 0, false)).toBe('No stops found.');
+    const s = reduce(picker(), { type: 'locating', token: 1 });
+    expect(s.screen).toMatchObject({ load: 'ready', locate: 'locating' });
+    expect(s.screen.kind === 'picker' && pickerMessage(s.screen.load, s.screen.stops.length, s.origin !== null)).toBe('2 stops found.');
   });
   test('stays quiet after a failed load', () => {
     expect(pickerMessage('failed', 0, false)).toBeNull();
@@ -314,6 +327,15 @@ describe('picking a stop', () => {
     s = reduce(s, { type: 'toggleRoute', routeId: 'b', at: 2 });
     expect(s.screen).toMatchObject({ chosen: [], cursor: 1 });
     expect(reduce(s, { type: 'toggleRoute', routeId: 'nope', at: 3 }).screen).toMatchObject({ chosen: [], cursor: 1 });
+  });
+  test('saving a stop and routes already pinned selects that slot instead of adding one', () => {
+    const r2: Route = { routeId: 'r2', name: 'R2', color: null, headsigns: [] };
+    const pinned = { ...stop, stopId: 's2', name: 'Stop 2' };
+    let s = reduce(asked(), { type: 'openRoutes', token: 1, reqId: 2, stop: pinned, routes: [r2] });
+    s = reduce(reduce(s, { type: 'toggleRoute', routeId: 'r2', at: 1 }), { type: 'saveSlot', at: 2 });
+    expect(s.screen.kind).toBe('board');
+    expect(s.slots).toHaveLength(3);
+    expect(s.index).toBe(1);
   });
   test('touch saves the chosen routes', () => {
     const s = reduce(reduce(routesScreen(), { type: 'toggleRoute', routeId: 'a', at: 1 }), { type: 'saveSlot', at: 2 });

@@ -11,6 +11,7 @@ export interface Trip {
   stopName: string;
   headsign: string;
   arrivalTime: number;
+  // mirrors the API payload; nothing reads it yet
   departureTime: number;
   isRealtime: boolean;
 }

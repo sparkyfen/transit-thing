@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { Action } from '../state';
-import { requestRoutes, requestStops } from './loadStops';
+import { requestRoutes, requestStops } from './requests';
 import type { Route, Stop } from './types';
 
 const stop: Stop = { stopId: 's9', stopCode: '9', name: 'Stop 9', lat: 0, lon: 0 };

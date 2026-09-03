@@ -64,6 +64,8 @@ describe('everySlotHasFeed', () => {
   const b = { stopId: 's2', stopName: 'B', routeIds: ['r2'] };
   test('is false until every slot has a feed', () => {
     expect(everySlotHasFeed(new Map(), [a, b])).toBe(false);
+    // vacuously true; callers gate on having stops first
+    expect(everySlotHasFeed(new Map(), [])).toBe(true);
     expect(everySlotHasFeed(new Map([[slotKey(a), { trips: [] }]]), [a, b])).toBe(false);
     expect(everySlotHasFeed(new Map([[slotKey(a), { trips: [] }], [slotKey(b), { trips: [] }]]), [a, b])).toBe(true);
   });
