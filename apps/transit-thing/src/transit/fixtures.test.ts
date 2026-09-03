@@ -15,4 +15,9 @@ describe('fixtureSource', () => {
     expect(mine).toHaveLength(2);
     expect(mine.every(t => t.routeId === 'st:40_100239' && t.routeName === '550')).toBe(true);
   });
+  test('at least one nearby stop has no routes, so the empty routes screen stays reachable', async () => {
+    const stops = await fixtureSource.stopsNear(null);
+    const routes = await Promise.all(stops.map(s => fixtureSource.routesAt(s.stopId)));
+    expect(routes.some(r => r.length === 0)).toBe(true);
+  });
 });

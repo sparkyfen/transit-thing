@@ -6,8 +6,9 @@ import { useControls } from './hooks/useControls';
 import { Ambient } from './screens/Ambient';
 import { Board } from './screens/Board';
 import { RoutePicker, StopPicker } from './screens/Picker';
-import { reduce, selectOn, type Action, type SelectTarget, type State } from './state';
+import { LOCATE_ROW, reduce, RETRY_ROW, selectOn, type Action, type SelectTarget, type State } from './state';
 import { FIXTURE_SLOTS, fixtureSource } from './transit/fixtures';
+import { unitsFor } from './transit/format';
 import { locate, type Origin } from './transit/geo';
 import { dataAsOf } from './transit/status';
 import { forSlot, nextAcrossSlots, slotKey, soonestUpcoming } from './transit/trips';
@@ -43,17 +44,30 @@ export default function App() {
     return () => clearInterval(tick);
   }, [config.ambientIdle]);
 
+  // a list that fails before the socket opens is retried on every open, so a reject is not an error
+  const loadConfig = useCallback(
+    () =>
+      client.config
+        .list()
+        .then(r => {
+          if (r.ok) setConfig(prev => r.response.entries.reduce((c, e) => applyConfig(c, e.key, e.value), prev));
+        })
+        .catch(() => {}),
+    [client],
+  );
+
   useEffect(() => client.on(e => {
-    if (e.type === 'open') setEverOpen(true);
+    if (e.type === 'open') {
+      setEverOpen(true);
+      void loadConfig();
+    }
     if (e.type === 'open' || e.type === 'close' || e.type === 'connecting') setConnection(client.connectionState);
-  }), [client]);
+  }), [client, loadConfig]);
 
   useEffect(() => {
-    void client.config.list().then(r => {
-      if (r.ok) setConfig(prev => r.response.entries.reduce((c, e) => applyConfig(c, e.key, e.value), prev));
-    });
+    void loadConfig();
     return client.config.onChanged(c => setConfig(prev => applyConfig(prev, c.key, c.value)));
-  }, [client]);
+  }, [client, loadConfig]);
 
   useEffect(() => {
     const offs = state.slots.map(slot =>
@@ -143,9 +157,10 @@ export default function App() {
         cursor={screen.cursor}
         status={screen.status}
         origin={state.origin}
-        onLocate={() => tap(0, { kind: 'locate' })}
-        onRetry={() => tap(1, { kind: 'retry' })}
-        onPick={stop => tap(screen.stops.indexOf(stop) + 1, { kind: 'pickStop', stop })}
+        units={unitsFor(config.feed)}
+        onLocate={() => tap(LOCATE_ROW, { kind: 'locate' })}
+        onRetry={() => tap(RETRY_ROW, { kind: 'retry' })}
+        onPick={(stop, row) => tap(row, { kind: 'pickStop', stop })}
       />
     );
   }
@@ -157,7 +172,10 @@ export default function App() {
         cursor={screen.cursor}
         chosen={screen.chosen}
         onToggle={routeId => dispatch({ type: 'toggleRoute', routeId, at: Date.now() })}
-        onSave={() => dispatch({ type: 'saveSlot', at: Date.now() })}
+        onSave={() => {
+          dispatch({ type: 'cursor', cursor: screen.routes.length, at: Date.now() });
+          dispatch({ type: 'saveSlot', at: Date.now() });
+        }}
       />
     );
   }
@@ -167,6 +185,7 @@ export default function App() {
       slotIndex={state.index}
       slotCount={state.slots.length}
       trips={trips}
+      hasFeed={feed !== undefined}
       perStop={config.perStop}
       nowMs={nowMs}
       connection={connection}

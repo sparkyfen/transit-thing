@@ -1,4 +1,4 @@
-# transit-thing
+# Transit Thing
 
 ## 0.1.0
 

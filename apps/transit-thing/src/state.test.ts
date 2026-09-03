@@ -83,6 +83,12 @@ describe('loading stops', () => {
     const s = reduce(picker(), { type: 'routesFailed', token: 1 });
     expect(s.screen).toMatchObject({ status: 'routesFailed', stops: [stop, stop2] });
   });
+  test('a reply that lands after a failed fix keeps the location error', () => {
+    const failed = reduce(reduce(picker(), { type: 'locating', token: 1 }), { type: 'locateFailed', token: 1 });
+    expect(reduce(failed, { type: 'stops', token: 1, stops: [stop] }).screen).toMatchObject({ status: 'locateFailed', stops: [stop] });
+    const retried = reduce(reduce(picker(), { type: 'stopsFailed', token: 1 }), { type: 'stops', token: 1, stops: [stop] });
+    expect(retried.screen).toMatchObject({ status: 'ready', stops: [stop] });
+  });
   test('failures for another request or screen are dropped', () => {
     expect(reduce(picker(), { type: 'stopsFailed', token: 2 }).screen).toMatchObject({ status: 'ready', stops: [stop, stop2] });
     expect(reduce(picker(), { type: 'routesFailed', token: 2 }).screen).toMatchObject({ status: 'ready' });
@@ -141,10 +147,13 @@ describe('pickerMessage', () => {
     expect(pickerMessage('ready', 0)).toBe('No stops found near you.');
     expect(pickerMessage('locateFailed', 0)).toBe('No stops found near you.');
   });
-  test('stays quiet while locating, after a failed load, or with stops to show', () => {
+  test('counts the stops once they are in', () => {
+    expect(pickerMessage('ready', 1)).toBe('1 stop found.');
+    expect(pickerMessage('ready', 2)).toBe('2 stops found.');
+  });
+  test('stays quiet while locating or after a failed load', () => {
     expect(pickerMessage('locating', 0)).toBeNull();
     expect(pickerMessage('stopsFailed', 0)).toBeNull();
-    expect(pickerMessage('ready', 2)).toBeNull();
   });
 });
 
@@ -153,6 +162,10 @@ describe('tapping a row', () => {
     expect(reduce(picker(), { type: 'cursor', cursor: 2, at: 1 }).screen).toMatchObject({ cursor: 2 });
     expect(reduce(picker(), { type: 'cursor', cursor: 9, at: 1 }).screen).toMatchObject({ cursor: 2 });
     expect(reduce(picker(), { type: 'cursor', cursor: -1, at: 1 }).screen).toMatchObject({ cursor: 0 });
+  });
+  test('moves the routes cursor as far as the save row', () => {
+    expect(reduce(routesScreen(), { type: 'cursor', cursor: 2, at: 1 }).screen).toMatchObject({ cursor: 2 });
+    expect(reduce(routesScreen(), { type: 'cursor', cursor: 5, at: 1 }).screen).toMatchObject({ cursor: 2 });
   });
   test('does nothing on the board', () => {
     expect(reduce(base, { type: 'cursor', cursor: 1, at: 1 }).screen.kind).toBe('board');
@@ -217,6 +230,11 @@ describe('picking a stop', () => {
     s = reduce(s, { type: 'select', at: 2 });
     expect(s.screen.kind).toBe('routes');
     expect(reduce(s, { type: 'saveSlot', at: 3 }).slots).toHaveLength(3);
+  });
+  test('tapping the disabled save only moves the cursor to it', () => {
+    const s = reduce(reduce(routesScreen(), { type: 'cursor', cursor: 2, at: 1 }), { type: 'saveSlot', at: 2 });
+    expect(s.screen).toMatchObject({ kind: 'routes', cursor: 2, chosen: [] });
+    expect(s.slots).toHaveLength(3);
   });
   test('back leaves the picker', () => {
     expect(reduce(picker(), { type: 'back', at: 1 }).screen.kind).toBe('board');

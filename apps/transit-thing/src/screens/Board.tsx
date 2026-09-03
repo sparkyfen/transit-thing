@@ -10,6 +10,7 @@ interface Props {
   slotIndex: number;
   slotCount: number;
   trips: Trip[];
+  hasFeed: boolean;
   perStop: number;
   nowMs: number;
   connection: Connection;
@@ -17,7 +18,7 @@ interface Props {
   onAddStop: () => void;
 }
 
-export function Board({ slot, slotIndex, slotCount, trips, perStop, nowMs, connection, updatedMs, onAddStop }: Props) {
+export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, nowMs, connection, updatedMs, onAddStop }: Props) {
   // focus lands on the screen root when the board comes back, never on body
   const root = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -55,7 +56,11 @@ export function Board({ slot, slotIndex, slotCount, trips, perStop, nowMs, conne
         </div>
       </header>
       <ol className="m-0 grid flex-1 list-none px-8 py-2" style={{ gridTemplateRows: `repeat(${perStop}, minmax(0, 1fr))` }}>
-        {trips.length === 0 ? (
+        {!hasFeed ? (
+          <li className="row-span-full self-center text-center text-title text-soft" role="status">
+            Waiting for arrivals
+          </li>
+        ) : trips.length === 0 ? (
           <li className="row-span-full self-center text-center text-title text-soft">No arrivals scheduled.</li>
         ) : (
           trips.map(trip => {
@@ -84,12 +89,14 @@ export function Board({ slot, slotIndex, slotCount, trips, perStop, nowMs, conne
       </ol>
       <footer className="flex items-center justify-between px-8 pb-4 font-mono text-hint text-soft">
         <span className="flex items-center gap-4">
-          {anyLive ? (
-            <span className="flex items-center gap-2">
-              <span className="inline-block h-2 w-2 rounded-full bg-ok" aria-hidden="true" />
-              live
-            </span>
-          ) : null}
+          <span className="flex w-14 shrink-0 items-center gap-2">
+            {anyLive ? (
+              <>
+                <span className="inline-block h-2 w-2 rounded-full bg-ok" aria-hidden="true" />
+                live
+              </>
+            ) : null}
+          </span>
           <span>Turn the dial for the next stop, press it to add one</span>
         </span>
         <button className="border border-edge px-4 py-2 text-near" onClick={onAddStop}>

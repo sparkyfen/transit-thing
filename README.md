@@ -13,8 +13,8 @@ also works in the car.
 - Shows the next arrivals for the stops you save, with a countdown, the
   scheduled time, and a live marker when the agency sends real-time data.
 - Turn the dial to move between stops. Presets 1 to 4 jump to your first four.
-- Press the dial or tap **Add a stop** to pick a stop from the ones around
-  you, then choose which routes to show.
+- Press the dial or tap **Add a stop** to pick a stop, then choose which
+  routes to show. Tap **Use my location** to put the closest stops first.
 - Shows a clock after a minute without input. Press any button to get back to
   the board.
 

@@ -11,6 +11,7 @@ import {
   minutesUntil,
   routeHex,
   rowTitle,
+  unitsFor,
 } from './format';
 
 const now = Date.UTC(2026, 8, 2, 20, 0, 0);
@@ -46,13 +47,30 @@ describe('clockTime', () => {
 
 describe('distanceLabel', () => {
   test('rounds short distances to ten meters', () => {
-    expect(distanceLabel(26)).toBe('30 m');
-    expect(distanceLabel(994)).toBe('990 m');
+    expect(distanceLabel(26, 'metric')).toBe('30 m');
+    expect(distanceLabel(994, 'metric')).toBe('990 m');
   });
   test('switches to kilometers once the rounded value reaches 1000', () => {
-    expect(distanceLabel(995)).toBe('1.0 km');
-    expect(distanceLabel(999)).toBe('1.0 km');
-    expect(distanceLabel(1500)).toBe('1.5 km');
+    expect(distanceLabel(995, 'metric')).toBe('1.0 km');
+    expect(distanceLabel(999, 'metric')).toBe('1.0 km');
+    expect(distanceLabel(1500, 'metric')).toBe('1.5 km');
+  });
+  test('rounds short US distances to ten feet', () => {
+    expect(distanceLabel(26, 'us')).toBe('90 ft');
+    expect(distanceLabel(1600, 'us')).toBe('5250 ft');
+  });
+  test('switches to miles once the rounded value reaches 5280 feet', () => {
+    expect(distanceLabel(1609, 'us')).toBe('1.0 mi');
+    expect(distanceLabel(1931, 'us')).toBe('1.2 mi');
+  });
+});
+
+describe('unitsFor', () => {
+  test('US feeds get feet and miles, everything else meters', () => {
+    expect(unitsFor('st')).toBe('us');
+    expect(unitsFor('wmata')).toBe('us');
+    expect(unitsFor('ttc')).toBe('metric');
+    expect(unitsFor('')).toBe('metric');
   });
 });
 

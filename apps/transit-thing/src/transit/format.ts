@@ -16,7 +16,27 @@ export function clockTime(epochSeconds: number): string {
   return new Date(epochSeconds * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-export function distanceLabel(meters: number): string {
+export type Units = 'us' | 'metric';
+
+// feeds served by tt.horner.tj whose riders expect feet and miles
+const US_FEEDS = new Set([
+  'st', 'sdmts', 'nymtabus', 'nycsubway', 'nycferry', 'nctd', 'wta', 'amtrak', 'wmata', 'dart', 'trimet', 'ctran', 'njtbus', 'njtrail',
+  'dash', 'denver', 'madison', 'mbta', 'cta', 'metra', 'houston', 'mcts', 'septarail', 'septabus', 'marta', 'pvta', 'vmt', 'sta', 'msp', 'link',
+]);
+
+export function unitsFor(feed: string): Units {
+  return US_FEEDS.has(feed) ? 'us' : 'metric';
+}
+
+const FEET_PER_METER = 3.28084;
+const METERS_PER_MILE = 1609.344;
+
+export function distanceLabel(meters: number, units: Units): string {
+  if (units === 'us') {
+    const feet = Math.round((meters * FEET_PER_METER) / 10) * 10;
+    if (feet < 5280) return `${feet} ft`;
+    return `${(meters / METERS_PER_MILE).toFixed(1)} mi`;
+  }
   const tens = Math.round(meters / 10) * 10;
   if (tens < 1000) return `${tens} m`;
   return `${(meters / 1000).toFixed(1)} km`;

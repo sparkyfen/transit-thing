@@ -1,6 +1,6 @@
 {
   "id": "01a06478-f4f4-725a-8bc0-776641f7a436",
-  "name": "transit-thing",
+  "name": "Transit Thing",
   "version": "0.1.0",
   "description": "Next arrivals for your stops, from a Transit Tracker server (tt.horner.tj by default). Reads this device's location only when you ask for nearby stops.",
   "icon": "icon.svg",

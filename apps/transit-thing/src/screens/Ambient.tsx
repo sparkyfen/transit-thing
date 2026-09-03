@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { ambientTitle, clockTime, countdown } from '../transit/format';
 import type { NextTrip } from '../transit/trips';
 import { Countdown } from './Countdown';
@@ -9,10 +10,15 @@ interface Props {
 }
 
 export function Ambient({ nowMs, next }: Props) {
+  // focus lands on the screen root when the clock takes over, never on body
+  const root = useRef<HTMLElement>(null);
+  useEffect(() => {
+    root.current?.focus({ preventScroll: true });
+  }, []);
   const seconds = Math.floor(nowMs / 1000);
   const min = next ? countdown(next.trip.arrivalTime, nowMs) : null;
   return (
-    <main className="relative flex h-full w-full flex-col items-center justify-center gap-6 bg-screen text-off-white">
+    <main ref={root} tabIndex={-1} className="relative flex h-full w-full flex-col items-center justify-center gap-6 bg-screen text-off-white outline-none">
       <h1 className="sr-only">Clock and next arrival</h1>
       <div className="font-display text-[6rem] leading-none font-medium tabular-nums tracking-display">{clockTime(seconds)}</div>
       {next && min ? (
