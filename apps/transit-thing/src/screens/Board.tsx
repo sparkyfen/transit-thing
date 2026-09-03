@@ -79,15 +79,12 @@ export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, now
                 <div className="flex items-center gap-3">
                   <Countdown min={min} size="board" dim={!fresh} />
                   <Lateness value={late} />
-                  <span className="flex w-[5.5rem] items-center justify-end gap-2 font-mono text-body tabular-nums text-soft">
+                  <span className="flex w-[5.5rem] items-center justify-end gap-2 font-mono text-body tabular-nums text-near">
                     {clockTime(trip.arrivalTime)}
-                    {fresh ? (
-                      <span
-                        className={`inline-block h-2 w-2 rounded-full ${trip.isRealtime ? 'bg-ok' : 'bg-transparent'}`}
-                        role="img"
-                        aria-label={trip.isRealtime ? 'Live estimate' : 'Scheduled time'}
-                      />
-                    ) : null}
+                    <span
+                      className={`inline-block h-2 w-2 rounded-full ${fresh && trip.isRealtime ? 'bg-ok' : 'bg-transparent'}`}
+                      {...(fresh ? { role: 'img', 'aria-label': trip.isRealtime ? 'Live estimate' : 'Scheduled time' } : { 'aria-hidden': true })}
+                    />
                   </span>
                 </div>
               </li>

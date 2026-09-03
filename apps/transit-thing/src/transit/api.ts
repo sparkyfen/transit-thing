@@ -2,7 +2,7 @@ import type { Origin } from './geo';
 import type { Route, Slot, Stop, Trip } from './types';
 
 // tt.horner.tj rejects more than 25 pairs per subscription and caps limit at 20
-const MAX_PAIRS = 25;
+export const MAX_PAIRS = 25;
 const MAX_LIMIT = 20;
 
 // server ids and the ids a user pastes into settings pass the same charset test
@@ -82,7 +82,7 @@ export function parseTrip(raw: unknown): Trip | null {
   const tripId = str(raw.tripId);
   const stopId = str(raw.stopId);
   const routeId = str(raw.routeId);
-  if (!tripId || !stopId || !routeId) return null;
+  if (!ID.test(tripId) || !ID.test(stopId) || !ID.test(routeId)) return null;
   return {
     tripId,
     stopId,

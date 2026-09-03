@@ -121,14 +121,24 @@ export function daemonTransport(client: BridgethingClient): Transport {
           if (m.connectionId === connectionId) shutdown(m.error.type);
         }),
       ];
-      void client.net.wsOpen({ connectionId, url, protocols: null, headers: null }).then(
-        res => {
-          if (closed) return;
-          if (res.ok) handlers.onOpen();
-          else shutdown(res.kind === 'domain' ? res.error.error.type : 'daemon request failed');
-        },
-        reason => shutdown(String(reason)),
-      );
+      // with no link the rpc would only queue behind the reconnect; failing now lets the caller back off instead
+      if (client.connectionState !== 'open') {
+        queueMicrotask(() => shutdown('daemon link down'));
+      } else {
+        void client.net.wsOpen({ connectionId, url, protocols: null, headers: null }).then(
+          res => {
+            if (closed) return;
+            if (res.ok) handlers.onOpen();
+            else shutdown(res.kind === 'domain' ? res.error.error.type : 'daemon request failed');
+          },
+          reason => {
+            if (closed) return;
+            shutdown(String(reason));
+            // the daemon may have registered the id before the rpc failed
+            client.net.wsClose({ connectionId, code: 1000, reason: 'abandoned' }).catch(() => {});
+          },
+        );
+      }
       return {
         send: text => {
           if (!closed) void client.net.wsSend({ connectionId, frame: { type: 'text', data: text } });

@@ -20,13 +20,14 @@ interface WsErrorEvent {
 const encode = (text: string) => new TextEncoder().encode(text);
 
 // the transport only needs the net surface, so the fake is a structural object cast to the client type
-function fakeClient(opts: { fetch?: { status: number; body: Uint8Array } | 'fail'; open?: 'ok' | 'fail' | 'reject' } = {}) {
+function fakeClient(opts: { fetch?: { status: number; body: Uint8Array } | 'fail'; open?: 'ok' | 'fail' | 'reject'; link?: string } = {}) {
   const messages = new Set<Listener<WsMessage>>();
   const closes = new Set<Listener<WsClosed>>();
   const errors = new Set<Listener<WsErrorEvent>>();
   const links = new Set<Listener<{ type: string }>>();
   const sent: { connectionId: string; text: string }[] = [];
   const closed: string[] = [];
+  const closeReasons: string[] = [];
   const opened: string[] = [];
   const fetched: { request: Record<string, unknown>; options: Record<string, unknown> | undefined }[] = [];
   const net = {
@@ -46,16 +47,18 @@ function fakeClient(opts: { fetch?: { status: number; body: Uint8Array } | 'fail
     wsSend: async (req: { connectionId: string; frame: { type: 'text'; data: string } }) => {
       sent.push({ connectionId: req.connectionId, text: req.frame.data });
     },
-    wsClose: async (req: { connectionId: string }) => {
+    wsClose: async (req: { connectionId: string; reason: string }) => {
       closed.push(req.connectionId);
+      closeReasons.push(req.reason);
     },
   };
   const on = (h: Listener<{ type: string }>) => (links.add(h), () => links.delete(h));
-  const client = { net, on } as unknown as BridgethingClient;
+  const client = { net, on, connectionState: opts.link ?? 'open' } as unknown as BridgethingClient;
   return {
     client,
     sent,
     closed,
+    closeReasons,
     opened,
     fetched,
     listeners: () => messages.size + closes.size + errors.size,
@@ -112,6 +115,21 @@ describe('daemonTransport sockets', () => {
     daemonTransport(fake.client).open('wss://tt.horner.tj/', handlers);
     await tick();
     expect(events).toEqual(['close:Error: rpc timeout']);
+    expect(fake.listeners()).toBe(0);
+    expect(fake.linkListeners()).toBe(0);
+    expect(fake.closed).toEqual([fake.opened[0]]);
+    expect(fake.closeReasons).toEqual(['abandoned']);
+  });
+
+  test('a daemon link that is not open fails the socket on the next microtask without dialing', async () => {
+    const fake = fakeClient({ link: 'connecting' });
+    const { events, handlers } = recorder();
+    daemonTransport(fake.client).open('wss://tt.horner.tj/', handlers);
+    expect(events).toEqual([]);
+    await tick();
+    expect(events).toEqual(['close:daemon link down']);
+    expect(fake.opened).toEqual([]);
+    expect(fake.closed).toEqual([]);
     expect(fake.listeners()).toBe(0);
     expect(fake.linkListeners()).toBe(0);
   });

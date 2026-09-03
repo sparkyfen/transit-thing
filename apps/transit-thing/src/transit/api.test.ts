@@ -86,6 +86,12 @@ describe('parseServerMessage', () => {
     expect(parseTrip({ ...trip, delaySeconds: NaN })?.delaySeconds).toBeUndefined();
     expect(parseTrip({ ...trip, delaySeconds: -30 })?.delaySeconds).toBe(-30);
   });
+  test('ids pass the same charset test as the ids from settings', () => {
+    expect(parseTrip({ ...trip, tripId: 'a b' })).toBeNull();
+    expect(parseTrip({ ...trip, stopId: '<script>' })).toBeNull();
+    expect(parseTrip({ ...trip, routeId: 'r'.repeat(65) })).toBeNull();
+    expect(parseTrip({ ...trip, tripId: 'st:1_ABC.x-y' })).not.toBeNull();
+  });
   test('recognizes heartbeats and errors', () => {
     expect(parseServerMessage(JSON.stringify({ event: 'heartbeat', data: null })).kind).toBe('heartbeat');
     expect(parseServerMessage(JSON.stringify({ status: 'error', message: 'Bad Request' }))).toEqual({ kind: 'error', message: 'Bad Request' });

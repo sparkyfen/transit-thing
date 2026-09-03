@@ -100,9 +100,7 @@ export default function App() {
 
   useEffect(() => client.config.onChanged(c => setConfig(prev => applyConfig(prev, c.key, c.value))), [client]);
 
-  useEffect(() => {
-    if (config.slots) dispatch({ type: 'slots', slots: config.slots });
-  }, [config.slots]);
+  useEffect(() => dispatch({ type: 'slots', slots: config.slots ?? [] }), [config.slots]);
 
   useEffect(() => {
     const offs = state.slots.map(slot =>

@@ -115,12 +115,12 @@ export function selectOn(screen: Screen): SelectTarget | null {
 }
 
 // settings come first, then whatever the dial added that settings do not name
-export function mergeSlots(fromConfig: Slot[], current: Slot[]): Slot[] {
+function mergeSlots(fromConfig: Slot[], current: Slot[]): Slot[] {
   const keys = new Set(fromConfig.map(slotKey));
   return [...fromConfig, ...current.filter(s => !keys.has(slotKey(s)))];
 }
 
-export function sameSlots(a: Slot[], b: Slot[]): boolean {
+function sameSlots(a: Slot[], b: Slot[]): boolean {
   return sameKeys(a.map(slotKey), b.map(slotKey));
 }
 

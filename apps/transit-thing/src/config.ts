@@ -1,4 +1,4 @@
-import { ID } from './transit/api';
+import { ID, MAX_PAIRS } from './transit/api';
 import type { Slot } from './transit/types';
 
 export interface Config {
@@ -41,7 +41,7 @@ export function parseSlots(value: string): Slot[] | null {
     const { stopId, stopName, routeIds } = r as Record<string, unknown>;
     if (typeof stopId !== 'string' || !ID.test(stopId)) return null;
     if (typeof stopName !== 'string' || stopName.length === 0 || stopName.length > 80) return null;
-    if (!Array.isArray(routeIds) || routeIds.length === 0 || routeIds.length > MAX_SLOTS) return null;
+    if (!Array.isArray(routeIds) || routeIds.length === 0 || routeIds.length > MAX_PAIRS) return null;
     if (!routeIds.every(id => typeof id === 'string' && ID.test(id))) return null;
     slots.push({ stopId, stopName, routeIds: routeIds as string[] });
   }

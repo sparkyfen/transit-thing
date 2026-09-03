@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { ApiError, liveSource, nextDelay, RECONNECT_MAX_MS, RECONNECT_MIN_MS } from './live';
-import type { Socket, SocketHandlers, Transport } from './transport';
+import { MAX_BODY_BYTES, type Socket, type SocketHandlers, type Transport } from './transport';
 
 const slot = { stopId: 'st:1_67652', stopName: 'Bay 9', routeIds: ['st:1_100133'] };
 const config = () => ({ baseUrl: 'https://tt.horner.tj/', feed: 'st', perStop: 3 });
@@ -145,6 +145,25 @@ describe('liveSource.subscribe', () => {
     sockets[0]!.handlers.onText(JSON.stringify({ status: 'error', message: 'Too many route-stop pairs' }));
     expect(sockets[0]!.closed).toBe(true);
     expect(t.pending).toHaveLength(1);
+  });
+
+  test('a frame over the body cap is dropped before parsing', () => {
+    const { transport, sockets } = fakeTransport();
+    const t = fakeTimers();
+    const src = liveSource(transport, config, t.timers);
+    const got: number[] = [];
+    const statuses: string[] = [];
+    src.onStatus((_, s) => statuses.push(s));
+    src.subscribe(slot, trips => got.push(trips.length));
+    sockets[0]!.handlers.onOpen();
+    const one = '{"tripId":"t","stopId":"s","routeId":"r","arrivalTime":1}';
+    const frame = `{"event":"schedule","data":{"trips":[${`${one},`.repeat(6000)}${one}]}}`;
+    expect(frame.length).toBeGreaterThan(MAX_BODY_BYTES);
+    sockets[0]!.handlers.onText(frame);
+    expect(got).toEqual([]);
+    expect(statuses).toEqual(['connecting']);
+    expect(sockets[0]!.closed).toBe(false);
+    expect(t.pending).toHaveLength(0);
   });
 
   test('unsubscribing closes the socket and cancels the retry', () => {

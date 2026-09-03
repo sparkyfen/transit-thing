@@ -36,11 +36,18 @@ const ALERTS: Record<PickerAlert, string> = {
   locate: "Couldn't get this device's location.",
   routes: "Couldn't load routes for that stop. Try again.",
 };
-const RATE_LIMITED = 'Too many requests. Try again in a minute.';
+const RATE_LIMITED: Record<Exclude<PickerAlert, 'locate'>, string> = {
+  refresh: 'Too many requests. Showing the stops found earlier.',
+  routes: 'Too many requests. Try again in a minute.',
+};
 
 export function alertText(alert: PickerAlert | null, reason: FailReason): string {
   if (!alert) return '';
-  return alert !== 'locate' && reason === 'rateLimited' ? RATE_LIMITED : ALERTS[alert];
+  return alert !== 'locate' && reason === 'rateLimited' ? RATE_LIMITED[alert] : ALERTS[alert];
+}
+
+export function loadFailedText(reason: FailReason): string {
+  return reason === 'rateLimited' ? RATE_LIMITED.routes : "Couldn't load stops.";
 }
 
 interface StopsProps {
@@ -92,7 +99,7 @@ export function StopPicker({ stops, cursor: stored, load, locate, alert, reason,
         {load === 'failed' ? (
           <li>
             <p className="m-0 py-2 font-mono text-hint text-warn" role="alert">
-              {reason === 'rateLimited' ? RATE_LIMITED : "Couldn't load stops."}
+              {loadFailedText(reason)}
             </p>
             <button {...rowProps(RETRY_ROW)} className={rowClass(cursor === RETRY_ROW)} onClick={onRetry}>
               <span className="text-row-lg">Try again</span>

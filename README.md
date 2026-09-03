@@ -12,7 +12,8 @@ also works in the car.
 
 - Shows the next arrivals for the stops you save, with a countdown, the
   scheduled time, and a live marker when the agency sends real-time data.
-- Marks a live arrival that is running late (`+N min`) or early (`-N min`).
+- Marks a live arrival that is running two or more minutes late (`+N min`),
+  or a minute or more early (`-N min`).
   Servers running a Transit Tracker fork with `delaySeconds` report this
   directly. Elsewhere the app compares each prediction with the first one it
   saw.
