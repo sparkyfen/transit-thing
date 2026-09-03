@@ -6,11 +6,11 @@ export const MAX_PAIRS = 25;
 const MAX_LIMIT = 20;
 
 // server ids and the ids a user pastes into settings pass the same charset test
-export const ID = /^[A-Za-z0-9:_.-]{1,64}$/;
+export const ID = /^[A-Za-z0-9:_. -]{1,64}$/;
 const MAX_NAME = 80;
 const MAX_STOPS = 200;
 const MAX_ROUTES = 100;
-// perStop caps at 4 per pair and a slot holds at most 25 pairs, so a schedule never needs more rows than this
+// the server limit is a total across pairs and the trips arrive in arrival order, so the cap never drops a sooner arrival
 const MAX_TRIPS = 50;
 
 // the fix snaps to the center of a 0.01 degree cell (about 1 km) before the box is built, so the request

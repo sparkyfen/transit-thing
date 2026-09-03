@@ -12,7 +12,7 @@ export interface Config {
 export const DEFAULT_CONFIG: Config = { apiBaseUrl: 'https://tt.horner.tj/', feed: 'st', slots: null, perStop: 3, ambientIdle: true };
 
 // the manifest pattern only guards the settings page; every path into the app re-checks here
-export function parseBaseUrl(value: string): string | null {
+function parseBaseUrl(value: string): string | null {
   let u: URL;
   try {
     u = new URL(value.trim());

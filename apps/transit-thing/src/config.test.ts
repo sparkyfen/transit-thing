@@ -45,10 +45,14 @@ describe('apiBaseUrl and slots', () => {
   test('parses a slots list and drops the whole value on any bad entry', () => {
     const good = JSON.stringify([{ stopId: 'st:1_67652', stopName: 'Bay 9', routeIds: ['st:1_100133'] }]);
     expect(applyConfig(DEFAULT_CONFIG, 'slots', good).slots).toEqual([{ stopId: 'st:1_67652', stopName: 'Bay 9', routeIds: ['st:1_100133'] }]);
-    for (const bad of ['[', '{}', JSON.stringify([{ stopId: 'a b', stopName: 'x', routeIds: ['r'] }]), JSON.stringify([{ stopId: 'a', stopName: 'x', routeIds: [] }]), JSON.stringify([{ stopId: 'a', stopName: 'x', routeIds: ['r'] }, 7])]) {
+    for (const bad of ['[', '{}', JSON.stringify([{ stopId: 'a/b', stopName: 'x', routeIds: ['r'] }]), JSON.stringify([{ stopId: 'a', stopName: 'x', routeIds: [] }]), JSON.stringify([{ stopId: 'a', stopName: 'x', routeIds: ['r'] }, 7])]) {
       expect(applyConfig(DEFAULT_CONFIG, 'slots', bad)).toBe(DEFAULT_CONFIG);
     }
     expect(applyConfig({ ...DEFAULT_CONFIG, slots: [] }, 'slots', '').slots).toBeNull();
+  });
+  test('accepts ids with a space, as the MTA feeds use', () => {
+    const value = JSON.stringify([{ stopId: 'nymtabus:MTA NYCT_M42', stopName: 'x', routeIds: ['nymtabus:MTA NYCT_M42'] }]);
+    expect(applyConfig(DEFAULT_CONFIG, 'slots', value).slots).toEqual([{ stopId: 'nymtabus:MTA NYCT_M42', stopName: 'x', routeIds: ['nymtabus:MTA NYCT_M42'] }]);
   });
   test('caps the slot count, the routes per slot, and the stop name', () => {
     const entry = (i: number, routes = 1, name = 'x') => ({ stopId: `s${i}`, stopName: name, routeIds: Array.from({ length: routes }, (_, r) => `r${r}`) });

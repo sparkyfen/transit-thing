@@ -114,16 +114,6 @@ export function selectOn(screen: Screen): SelectTarget | null {
   return stop ? { kind: 'pickStop', stop } : null;
 }
 
-// settings come first, then whatever the dial added that settings do not name
-function mergeSlots(fromConfig: Slot[], current: Slot[]): Slot[] {
-  const keys = new Set(fromConfig.map(slotKey));
-  return [...fromConfig, ...current.filter(s => !keys.has(slotKey(s)))];
-}
-
-function sameSlots(a: Slot[], b: Slot[]): boolean {
-  return sameKeys(a.map(slotKey), b.map(slotKey));
-}
-
 function sameKeys(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((k, i) => k === b[i]);
 }
@@ -181,12 +171,13 @@ function step(state: State, action: Action): State {
       if (screen.kind !== 'picker' || screen.token !== action.token) return state;
       return { ...state, screen: { ...screen, locate: 'failed', alert: 'locate' } };
     case 'slots': {
-      const deviceAdded = state.slots.filter(s => !state.configKeys.includes(slotKey(s)));
-      const slots = mergeSlots(action.slots, deviceAdded);
       const configKeys = action.slots.map(slotKey);
-      if (sameSlots(slots, state.slots) && sameKeys(configKeys, state.configKeys)) return state;
-      const current = state.slots[state.index];
-      const kept = current ? slots.findIndex(s => slotKey(s) === slotKey(current)) : -1;
+      const currentKeys = state.slots.map(slotKey);
+      // settings come first, then whatever the dial added that settings do not name
+      const slots = [...action.slots, ...state.slots.filter((_, i) => !state.configKeys.includes(currentKeys[i]!) && !configKeys.includes(currentKeys[i]!))];
+      if (sameKeys(slots.map(slotKey), currentKeys) && sameKeys(configKeys, state.configKeys)) return state;
+      const current = currentKeys[state.index];
+      const kept = current === undefined ? -1 : slots.findIndex(s => slotKey(s) === current);
       const index = kept >= 0 ? kept : Math.min(state.index, Math.max(0, slots.length - 1));
       return { ...state, slots, configKeys, index };
     }

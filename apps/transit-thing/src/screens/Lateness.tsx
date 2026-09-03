@@ -10,11 +10,11 @@ export function latenessText(value: Value): { label: string; glyph: string; late
   return { label: `Running ${minutes} ${unit} ${late ? 'late' : 'early'}`, glyph: `${late ? '+' : '-'}${minutes} min`, late };
 }
 
-// late reads as a warning; early stays quiet, since the green is reserved for the live marker
+// late reads as a warning; early sits with the clock time, since the green is reserved for the live marker
 export function Lateness({ value }: { value: Value }) {
   const text = latenessText(value);
   return (
-    <span className={`w-[4.5rem] text-right font-mono text-body whitespace-nowrap ${text?.late ? 'text-warn' : 'text-soft'}`}>
+    <span className={`w-[4.5rem] text-right font-mono text-body whitespace-nowrap ${text?.late ? 'text-warn' : 'text-near'}`}>
       {text ? (
         <>
           <span className="sr-only">{text.label}</span>

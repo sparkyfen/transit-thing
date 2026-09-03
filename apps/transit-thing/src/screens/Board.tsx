@@ -1,6 +1,6 @@
 import { useScreenFocus } from '../hooks/useScreenFocus';
 import { clockTime, minutesUntil, rowTitle } from '../transit/format';
-import { lateness, showLateness } from '../transit/delay';
+import { lateness } from '../transit/delay';
 import { boardStatus, waitingText, type Connection, type Link } from '../transit/status';
 import type { Slot, Trip } from '../transit/types';
 import { Countdown } from './Countdown';
@@ -71,7 +71,8 @@ export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, now
         ) : (
           trips.map(trip => {
             const min = minutesUntil(trip.arrivalTime, nowMs);
-            const late = showLateness(fresh, trip) ? lateness(trip, firstSeen) : null;
+            // a scheduled time has no prediction to drift from, and a stale one while the feed is away says nothing about now
+            const late = fresh && trip.isRealtime ? lateness(trip, firstSeen) : null;
             return (
               <li key={trip.tripId} className="grid grid-cols-[auto_1fr_auto] items-center gap-5 border-b border-rule last:border-b-0">
                 <RouteBadge name={trip.routeName} color={trip.routeColor} size="lg" />
@@ -79,7 +80,7 @@ export function Board({ slot, slotIndex, slotCount, trips, hasFeed, perStop, now
                 <div className="flex items-center gap-3">
                   <Countdown min={min} size="board" dim={!fresh} />
                   <Lateness value={late} />
-                  <span className="flex w-[5.5rem] items-center justify-end gap-2 font-mono text-body tabular-nums text-near">
+                  <span className={`flex w-[5.5rem] items-center justify-end gap-2 font-mono text-body tabular-nums ${fresh ? 'text-near' : 'text-soft'}`}>
                     {clockTime(trip.arrivalTime)}
                     <span
                       className={`inline-block h-2 w-2 rounded-full ${fresh && trip.isRealtime ? 'bg-ok' : 'bg-transparent'}`}

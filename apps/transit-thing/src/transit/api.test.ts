@@ -39,6 +39,10 @@ describe('subscribeMessage', () => {
     expect(JSON.parse(subscribeMessage(slot, 99)).data.limit).toBe(20);
     expect(JSON.parse(subscribeMessage(slot, 0)).data.limit).toBe(1);
   });
+  test('a space inside an id stays inside the pair', () => {
+    const msg = JSON.parse(subscribeMessage({ stopId: 'nymtabus:MTA NYCT_M42', stopName: 'x', routeIds: ['nymtabus:MTA NYCT_M42', 'r2'] }, 3));
+    expect(msg.data.routeStopPairs).toBe('nymtabus:MTA NYCT_M42,nymtabus:MTA NYCT_M42;r2,nymtabus:MTA NYCT_M42');
+  });
   test('sends the first 25 routes only', () => {
     const routeIds = Array.from({ length: 30 }, (_, i) => `r${i}`);
     const pairs = JSON.parse(subscribeMessage({ ...slot, routeIds }, 3)).data.routeStopPairs.split(';');
@@ -87,8 +91,9 @@ describe('parseServerMessage', () => {
     expect(parseTrip({ ...trip, delaySeconds: -30 })?.delaySeconds).toBe(-30);
   });
   test('ids pass the same charset test as the ids from settings', () => {
-    expect(parseTrip({ ...trip, tripId: 'a b' })).toBeNull();
+    expect(parseTrip({ ...trip, tripId: 'a\tb' })).toBeNull();
     expect(parseTrip({ ...trip, stopId: '<script>' })).toBeNull();
+    expect(parseTrip({ ...trip, routeId: 'nymtabus:MTA NYCT_M42' })?.routeId).toBe('nymtabus:MTA NYCT_M42');
     expect(parseTrip({ ...trip, routeId: 'r'.repeat(65) })).toBeNull();
     expect(parseTrip({ ...trip, tripId: 'st:1_ABC.x-y' })).not.toBeNull();
   });
@@ -131,10 +136,14 @@ describe('parseStops and parseRoutes', () => {
   });
   test('drop ids outside the id charset and cut names to 80 characters', () => {
     const long = 'x'.repeat(100);
-    expect(parseStops([{ stopId: 'a b', lat: 1, lon: 2 }, { stopId: 'a'.repeat(65), lat: 1, lon: 2 }, { stopId: 'ok', name: long, stopCode: long, lat: 1, lon: 2 }])).toEqual([
+    expect(parseStops([{ stopId: 'a/b', lat: 1, lon: 2 }, { stopId: 'a'.repeat(65), lat: 1, lon: 2 }, { stopId: 'ok', name: long, stopCode: long, lat: 1, lon: 2 }])).toEqual([
       { stopId: 'ok', stopCode: 'x'.repeat(80), name: 'x'.repeat(80), lat: 1, lon: 2 },
     ]);
     expect(parseRoutes([{ routeId: '<r>' }, { routeId: 'r', name: long, headsigns: [long] }])).toEqual([{ routeId: 'r', name: 'x'.repeat(80), color: null, headsigns: ['x'.repeat(80)] }]);
+  });
+  test('an id may hold a space, as the MTA feeds do', () => {
+    expect(parseRoutes([{ routeId: 'nymtabus:MTA NYCT_M42' }])).toEqual([{ routeId: 'nymtabus:MTA NYCT_M42', name: 'nymtabus:MTA NYCT_M42', color: null, headsigns: [] }]);
+    expect(parseStops([{ stopId: 'nymtabus:MTA NYCT_M42', lat: 1, lon: 2 }])).toHaveLength(1);
   });
   test('keep the first 200 stops and 100 routes', () => {
     const stops = Array.from({ length: 250 }, (_, i) => ({ stopId: `s${i}`, lat: 1, lon: 2 }));

@@ -19,6 +19,8 @@ export interface Transport {
 
 // a stops reply for a full box is a few KB; anything near this size is not the api, and the cap bounds the parse cost
 export const MAX_BODY_BYTES = 256 * 1024;
+// the close reason for a dial refused because the daemon link is not open; liveSource keys its backoff on it
+export const LINK_DOWN = 'daemon link down';
 // the request budget is 45 s, and the client rpc has to outlive it to see the reply
 const REQUEST_TIMEOUT_MS = 45_000;
 const RPC_TIMEOUT_MS = 50_000;
@@ -105,25 +107,25 @@ export function daemonTransport(client: BridgethingClient): Transport {
       const shutdown = (reason: string | null) => {
         if (closed) return;
         closed = true;
-        offs.forEach(off => off());
+        off();
         untrack(shutdown);
         if (reason !== null) handlers.onClose(reason);
       };
       track(shutdown);
-      const offs = [
-        client.net.onWsMessage(m => {
+      const off = client.net.subscribePartial({
+        wsMessage: m => {
           if (m.connectionId === connectionId && !closed && m.frame.type === 'text') handlers.onText(m.frame.data);
-        }),
-        client.net.onWsClosed(m => {
+        },
+        wsClosed: m => {
           if (m.connectionId === connectionId) shutdown(m.reason || `closed ${m.code}`);
-        }),
-        client.net.onWsErrorEvent(m => {
+        },
+        wsErrorEvent: m => {
           if (m.connectionId === connectionId) shutdown(m.error.type);
-        }),
-      ];
+        },
+      });
       // with no link the rpc would only queue behind the reconnect; failing now lets the caller back off instead
       if (client.connectionState !== 'open') {
-        queueMicrotask(() => shutdown('daemon link down'));
+        queueMicrotask(() => shutdown(LINK_DOWN));
       } else {
         void client.net.wsOpen({ connectionId, url, protocols: null, headers: null }).then(
           res => {

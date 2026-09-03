@@ -17,7 +17,7 @@ import { requestRoutes, requestStops } from './transit/requests';
 import { dataAsOf, nextLink, type Link } from './transit/status';
 import { browserTransport, daemonTransport } from './transit/transport';
 import { everySlotHasFeed, forSlot, nextAcrossSlots, slotKey, soonestUpcoming } from './transit/trips';
-import type { Slot, TransitSource, Trip } from './transit/types';
+import type { Slot, Trip } from './transit/types';
 
 const SOON_MS = 20 * 60_000;
 
@@ -52,7 +52,7 @@ export default function App() {
   configRef.current = config;
   const [links, setLinks] = useState<Map<string, Link>>(() => new Map());
 
-  const source = useMemo<TransitSource | LiveSource>(() => {
+  const source = useMemo<LiveSource>(() => {
     if (USE_FIXTURES) return fixtureSource;
     return liveSource(DIRECT ? browserTransport() : daemonTransport(client), () => ({
       baseUrl: configRef.current.apiBaseUrl,
@@ -61,13 +61,14 @@ export default function App() {
     }));
   }, [client]);
 
-  useEffect(() => {
-    if (!('onStatus' in source)) return;
-    return source.onStatus((slot, status) => {
-      const key = slotKey(slot);
-      setLinks(prev => new Map(prev).set(key, nextLink(prev.get(key), status, Date.now())));
-    });
-  }, [source]);
+  useEffect(
+    () =>
+      source.onStatus((slot, status) => {
+        const key = slotKey(slot);
+        setLinks(prev => new Map(prev).set(key, nextLink(prev.get(key), status, Date.now())));
+      }),
+    [source],
+  );
 
   useEffect(() => {
     const tick = setInterval(() => {

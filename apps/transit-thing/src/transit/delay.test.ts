@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { lateness, rememberFirstSeen, showLateness } from './delay';
+import { lateness, rememberFirstSeen } from './delay';
 import type { Trip } from './types';
 
 const trip = (id: string, arrivalTime: number, delaySeconds?: number): Trip => ({
@@ -30,14 +30,6 @@ describe('lateness', () => {
   });
   test('a trip never seen before has no drift', () => {
     expect(lateness(trip('b', 5000), new Map([['a', 1000]]))).toBeNull();
-  });
-});
-
-describe('showLateness', () => {
-  test('needs a fresh feed and a live estimate', () => {
-    expect(showLateness(true, trip('a', 1000))).toBe(true);
-    expect(showLateness(false, trip('a', 1000))).toBe(false);
-    expect(showLateness(true, { ...trip('a', 1000), isRealtime: false })).toBe(false);
   });
 });
 

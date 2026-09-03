@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { ApiError, liveSource, nextDelay, RECONNECT_MAX_MS, RECONNECT_MIN_MS } from './live';
-import { MAX_BODY_BYTES, type Socket, type SocketHandlers, type Transport } from './transport';
+import { ApiError, liveSource, nextDelay, RECONNECT_MAX_MS, RECONNECT_MIN_MS, WATCHDOG_MS } from './live';
+import { LINK_DOWN, MAX_BODY_BYTES, type Socket, type SocketHandlers, type Transport } from './transport';
 
 const slot = { stopId: 'st:1_67652', stopName: 'Bay 9', routeIds: ['st:1_100133'] };
 const config = () => ({ baseUrl: 'https://tt.horner.tj/', feed: 'st', perStop: 3 });
@@ -163,6 +163,68 @@ describe('liveSource.subscribe', () => {
     expect(got).toEqual([]);
     expect(statuses).toEqual(['connecting']);
     expect(sockets[0]!.closed).toBe(false);
+    expect(t.pending.map(p => p.ms)).toEqual([WATCHDOG_MS]);
+  });
+
+  test('a dial refused for a missing daemon link does not grow the backoff', () => {
+    const { transport, sockets } = fakeTransport();
+    const t = fakeTimers();
+    const src = liveSource(transport, config, t.timers);
+    src.subscribe(slot, () => {});
+    sockets[0]!.handlers.onClose('gone');
+    t.fire();
+    sockets[1]!.handlers.onClose('gone again');
+    expect(t.pending[0]!.ms).toBe(RECONNECT_MIN_MS * 2);
+    t.fire();
+    sockets[2]!.handlers.onClose(LINK_DOWN);
+    expect(t.pending[0]!.ms).toBe(RECONNECT_MIN_MS);
+    t.fire();
+    sockets[3]!.handlers.onClose(LINK_DOWN);
+    expect(t.pending[0]!.ms).toBe(RECONNECT_MIN_MS);
+    t.fire();
+    // a real failure after the link returns grows from the minimum again
+    sockets[4]!.handlers.onClose('refused');
+    expect(t.pending[0]!.ms).toBe(RECONNECT_MIN_MS);
+    t.fire();
+    sockets[5]!.handlers.onClose('refused');
+    expect(t.pending[0]!.ms).toBe(RECONNECT_MIN_MS * 2);
+  });
+
+  test('a socket silent for too long is closed and redialed', () => {
+    const { transport, sockets } = fakeTransport();
+    const t = fakeTimers();
+    const src = liveSource(transport, config, t.timers);
+    const statuses: string[] = [];
+    src.onStatus((_, s) => statuses.push(s));
+    src.subscribe(slot, () => {});
+    expect(t.pending).toHaveLength(0);
+    sockets[0]!.handlers.onOpen();
+    expect(t.pending.map(p => p.ms)).toEqual([WATCHDOG_MS]);
+    // every message from the server, heartbeat or schedule, restarts the watchdog
+    sockets[0]!.handlers.onText(JSON.stringify({ event: 'heartbeat', data: null }));
+    sockets[0]!.handlers.onText(JSON.stringify({ event: 'schedule', data: { trips: [] } }));
+    expect(t.pending.map(p => p.ms)).toEqual([WATCHDOG_MS]);
+    t.fire();
+    expect(sockets[0]!.closed).toBe(true);
+    expect(statuses.at(-1)).toBe('reconnecting');
+    expect(t.pending.map(p => p.ms)).toEqual([RECONNECT_MIN_MS]);
+    t.fire();
+    expect(sockets).toHaveLength(2);
+    // a close from the server disarms the watchdog, and so does unsubscribing
+    sockets[1]!.handlers.onOpen();
+    sockets[1]!.handlers.onClose('gone');
+    expect(t.pending.map(p => p.ms)).toEqual([RECONNECT_MIN_MS * 2]);
+    t.fire();
+    sockets[2]!.handlers.onOpen();
+    expect(t.pending.map(p => p.ms)).toEqual([WATCHDOG_MS]);
+  });
+
+  test('unsubscribing disarms the watchdog', () => {
+    const { transport, sockets } = fakeTransport();
+    const t = fakeTimers();
+    const off = liveSource(transport, config, t.timers).subscribe(slot, () => {});
+    sockets[0]!.handlers.onOpen();
+    off();
     expect(t.pending).toHaveLength(0);
   });
 
@@ -200,6 +262,14 @@ describe('liveSource rest calls', () => {
     expect(await src.stopsNear({ lat: 47.615, lon: -122.195 })).toEqual(await src.stopsNear({ lat: 47.6199, lon: -122.1901 }));
     expect(await src.routesAt('st:x')).toEqual(await src.routesAt('st:x'));
     expect(calls).toEqual([url, routesUrl]);
+  });
+  test('an empty list is not cached, so a retry asks again', async () => {
+    const routesUrl = 'https://tt.horner.tj/stops/st%3Ax/routes';
+    const { transport, calls } = fakeTransport({ [routesUrl]: { status: 200, body: [] } });
+    const src = liveSource(transport, config, fakeTimers().timers);
+    expect(await src.routesAt('st:x')).toEqual([]);
+    expect(await src.routesAt('st:x')).toEqual([]);
+    expect(calls).toHaveLength(2);
   });
   test('a failed request is not cached', async () => {
     const routesUrl = 'https://tt.horner.tj/stops/st%3Ax/routes';

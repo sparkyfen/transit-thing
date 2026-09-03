@@ -1,4 +1,5 @@
-import type { Route, Slot, Stop, TransitSource, Trip } from './types';
+import type { LiveSource } from './live';
+import type { Route, Slot, Stop, Trip } from './types';
 
 // recorded from tt.horner.tj on 2026-09-02, times anchored at subscribe time
 export const FIXTURE_SLOTS: Slot[] = [
@@ -111,7 +112,7 @@ function tripsFor(slot: Slot, nowMs: number): Trip[] {
   });
 }
 
-export const fixtureSource: TransitSource = {
+export const fixtureSource: LiveSource = {
   subscribe(slot, onTrips) {
     onTrips(tripsFor(slot, Date.now()));
     return () => {};
@@ -121,5 +122,8 @@ export const fixtureSource: TransitSource = {
   },
   async routesAt(stopId) {
     return ROUTES.get(stopId) ?? [];
+  },
+  onStatus() {
+    return () => {};
   },
 };

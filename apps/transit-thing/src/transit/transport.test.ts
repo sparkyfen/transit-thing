@@ -31,9 +31,16 @@ function fakeClient(opts: { fetch?: { status: number; body: Uint8Array } | 'fail
   const opened: string[] = [];
   const fetched: { request: Record<string, unknown>; options: Record<string, unknown> | undefined }[] = [];
   const net = {
-    onWsMessage: (h: Listener<WsMessage>) => (messages.add(h), () => messages.delete(h)),
-    onWsClosed: (h: Listener<WsClosed>) => (closes.add(h), () => closes.delete(h)),
-    onWsErrorEvent: (h: Listener<WsErrorEvent>) => (errors.add(h), () => errors.delete(h)),
+    subscribePartial: (h: { wsMessage?: Listener<WsMessage>; wsClosed?: Listener<WsClosed>; wsErrorEvent?: Listener<WsErrorEvent> }) => {
+      if (h.wsMessage) messages.add(h.wsMessage);
+      if (h.wsClosed) closes.add(h.wsClosed);
+      if (h.wsErrorEvent) errors.add(h.wsErrorEvent);
+      return () => {
+        if (h.wsMessage) messages.delete(h.wsMessage);
+        if (h.wsClosed) closes.delete(h.wsClosed);
+        if (h.wsErrorEvent) errors.delete(h.wsErrorEvent);
+      };
+    },
     fetch: async (req: { request: Record<string, unknown> }, options?: Record<string, unknown>) => {
       fetched.push({ request: req.request, options });
       if (opts.fetch === 'fail' || !opts.fetch) return { ok: false, kind: 'domain', error: { error: { type: 'timeout' } } };
