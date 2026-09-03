@@ -1,5 +1,6 @@
 import { BridgethingClient } from '@bridgething/client';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { applyConfig, DEFAULT_CONFIG, type Config } from './config';
 import { daemonUrl } from './daemon';
 import { useControls } from './hooks/useControls';
 import { Ambient } from './screens/Ambient';
@@ -7,11 +8,10 @@ import { Board } from './screens/Board';
 import { RoutePicker, StopPicker } from './screens/Picker';
 import { reduce, selectOn, type Action, type SelectTarget, type State } from './state';
 import { FIXTURE_SLOTS, fixtureSource } from './transit/fixtures';
-import type { Origin } from './transit/geo';
+import { locate, type Origin } from './transit/geo';
 import { forSlot, slotKey, soonestUpcoming } from './transit/trips';
 import type { Slot, Trip } from './transit/types';
 
-const PER_STOP = 3;
 const SOON_MS = 20 * 60_000;
 
 interface Feed {
@@ -21,8 +21,6 @@ interface Feed {
 
 const initial: State = { slots: FIXTURE_SLOTS, index: 0, screen: { kind: 'board' }, origin: null, lastInputAt: Date.now() };
 
-const round3 = (n: number) => Math.round(n * 1000) / 1000;
-
 export default function App() {
   const client = useMemo(() => new BridgethingClient({ url: daemonUrl() }), []);
   const [state, dispatch] = useReducer(reduce, initial);
@@ -31,20 +29,30 @@ export default function App() {
   const tokens = useRef(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [feeds, setFeeds] = useState<Map<string, Feed>>(() => new Map());
-  const [connected, setConnected] = useState(client.connectionState === 'open');
+  const [connection, setConnection] = useState(client.connectionState);
+  const [config, setConfig] = useState<Config>(DEFAULT_CONFIG);
+  const ambientIdle = useRef(config.ambientIdle);
+  ambientIdle.current = config.ambientIdle;
 
   useEffect(() => {
     const tick = setInterval(() => {
       const at = Date.now();
       setNowMs(at);
-      dispatch({ type: 'idle', at });
+      if (ambientIdle.current) dispatch({ type: 'idle', at });
     }, 1000);
     return () => clearInterval(tick);
   }, []);
 
   useEffect(() => client.on(e => {
-    if (e.type === 'open' || e.type === 'close' || e.type === 'connecting') setConnected(client.connectionState === 'open');
+    if (e.type === 'open' || e.type === 'close' || e.type === 'connecting') setConnection(client.connectionState);
   }), [client]);
+
+  useEffect(() => {
+    void client.config.list().then(r => {
+      if (r.ok) setConfig(prev => r.response.entries.reduce((c, e) => applyConfig(c, e.key, e.value), prev));
+    });
+    return client.config.onChanged(c => setConfig(prev => applyConfig(prev, c.key, c.value)));
+  }, [client]);
 
   useEffect(() => {
     const offs = state.slots.map(slot =>
@@ -77,10 +85,11 @@ export default function App() {
       const { token } = screen;
       if (target.kind === 'retry') return loadStops(token, origin);
       if (target.kind === 'locate') {
-        const r = await client.geo.getOnce({ accuracy: 'coarse' }).catch(() => null);
-        if (!r?.ok) return;
-        const here = { lat: round3(r.response.position.lat), lon: round3(r.response.position.lon) };
-        dispatch({ type: 'origin', origin: here });
+        if (screen.status === 'locating') return;
+        dispatch({ type: 'locating', token });
+        const here = await locate(client.geo);
+        if (!here) return dispatch({ type: 'locateFailed', token });
+        dispatch({ type: 'origin', token, origin: here });
         return loadStops(token, here);
       }
       try {
@@ -111,7 +120,7 @@ export default function App() {
 
   const slot: Slot | null = state.slots[state.index] ?? null;
   const feed = slot ? feeds.get(slotKey(slot)) : undefined;
-  const trips = soonestUpcoming(feed?.trips ?? [], nowMs, PER_STOP);
+  const trips = soonestUpcoming(feed?.trips ?? [], nowMs, config.perStop);
 
   const next = useMemo(() => {
     let best: { slot: Slot; trip: Trip } | null = null;
@@ -155,9 +164,9 @@ export default function App() {
       slotIndex={state.index}
       slotCount={state.slots.length}
       trips={trips}
-      perStop={PER_STOP}
+      perStop={config.perStop}
       nowMs={nowMs}
-      connected={connected}
+      connection={connection}
       updatedMs={feed?.updatedMs ?? null}
       onAddStop={() => void perform({ kind: 'openPicker' })}
     />

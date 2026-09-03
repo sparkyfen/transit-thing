@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { badgeColors, clockTime, contrastRatio, countdown, minutesUntil, routeHex, textOn } from './format';
+import { badgeColors, badgeLabel, clockTime, contrastRatio, countdown, countdownLabel, distanceLabel, minutesUntil, routeHex, rowTitle } from './format';
 
 const now = Date.UTC(2026, 8, 2, 20, 0, 0);
 const at = (min: number) => Math.floor(now / 1000) + min * 60;
@@ -18,9 +18,29 @@ describe('countdown', () => {
   });
 });
 
+describe('countdownLabel', () => {
+  test('reads as a sentence for screen readers', () => {
+    expect(countdownLabel('now')).toBe('Due now');
+    expect(countdownLabel('1')).toBe('in 1 minute');
+    expect(countdownLabel('2')).toBe('in 2 minutes');
+  });
+});
+
 describe('clockTime', () => {
   test('formats a local time with minutes', () => {
     expect(clockTime(at(0))).toMatch(/\d{1,2}:\d{2}/);
+  });
+});
+
+describe('distanceLabel', () => {
+  test('rounds short distances to ten meters', () => {
+    expect(distanceLabel(26)).toBe('30 m');
+    expect(distanceLabel(994)).toBe('990 m');
+  });
+  test('switches to kilometers once the rounded value reaches 1000', () => {
+    expect(distanceLabel(995)).toBe('1.0 km');
+    expect(distanceLabel(999)).toBe('1.0 km');
+    expect(distanceLabel(1500)).toBe('1.5 km');
   });
 });
 
@@ -47,21 +67,42 @@ describe('contrastRatio', () => {
   });
 });
 
-describe('textOn', () => {
+describe('badge text color', () => {
   test('dark text on a light route color', () => {
-    expect(textOn('FDB71A')).toBe('#0a0c0e');
-    expect(textOn('00A5D2')).toBe('#0a0c0e');
+    expect(badgeColors('FDB71A').fg).toBe('#0a0c0e');
+    expect(badgeColors('00A5D2').fg).toBe('#0a0c0e');
   });
   test('light text on a dark route color', () => {
-    expect(textOn('2B376E')).toBe('#efefef');
+    expect(badgeColors('2B376E').fg).toBe('#efefef');
   });
   test('light text when the color is missing or malformed', () => {
-    expect(textOn(null)).toBe('#efefef');
-    expect(textOn('zzz')).toBe('#efefef');
+    expect(badgeColors(null).fg).toBe('#efefef');
+    expect(badgeColors('zzz').fg).toBe('#efefef');
   });
   test('picks the side with the higher ratio at the boundary', () => {
-    expect(textOn('737373')).toBe('#0a0c0e');
-    expect(textOn('727272')).toBe('#efefef');
+    expect(badgeColors('737373').fg).toBe('#0a0c0e');
+    expect(badgeColors('727272').fg).toBe('#efefef');
+  });
+});
+
+describe('badgeLabel', () => {
+  test('short names stay on the badge', () => {
+    expect(badgeLabel('240')).toBe('240');
+    expect(badgeLabel('B Line')).toBe('B Line');
+    expect(badgeLabel('2 Line')).toBe('2 Line');
+  });
+  test('word-length names leave the badge to the icon', () => {
+    expect(badgeLabel('Bainbridge Ferry')).toBeNull();
+    expect(badgeLabel('Line 1A')).toBeNull();
+  });
+});
+
+describe('rowTitle', () => {
+  test('a badged route shows the headsign alone', () => {
+    expect(rowTitle('240', 'Renton Newcastle')).toBe('Renton Newcastle');
+  });
+  test('an unbadged route leads with its name', () => {
+    expect(rowTitle('Bainbridge Ferry', 'Bainbridge Island')).toBe('Bainbridge Ferry · Bainbridge Island');
   });
 });
 

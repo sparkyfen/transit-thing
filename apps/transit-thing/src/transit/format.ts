@@ -7,8 +7,19 @@ export function countdown(arrivalTime: number, nowMs: number): string {
   return min === 0 ? 'now' : String(min);
 }
 
+export function countdownLabel(min: string): string {
+  if (min === 'now') return 'Due now';
+  return min === '1' ? 'in 1 minute' : `in ${min} minutes`;
+}
+
 export function clockTime(epochSeconds: number): string {
   return new Date(epochSeconds * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+export function distanceLabel(meters: number): string {
+  const tens = Math.round(meters / 10) * 10;
+  if (tens < 1000) return `${tens} m`;
+  return `${(meters / 1000).toFixed(1)} km`;
 }
 
 const DARK = '#0a0c0e';
@@ -61,6 +72,13 @@ export function badgeColors(color: string | null | undefined): { bg: string; fg:
   return { bg, fg };
 }
 
-export function textOn(color: string | null | undefined): string {
-  return badgeColors(color).fg;
+const BADGE_MAX = 6;
+
+// a name longer than the badge can hold moves into the headsign column
+export function badgeLabel(name: string): string | null {
+  return name.length <= BADGE_MAX ? name : null;
+}
+
+export function rowTitle(name: string, headsign: string): string {
+  return badgeLabel(name) ? headsign : `${name} · ${headsign}`;
 }

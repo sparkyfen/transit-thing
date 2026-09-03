@@ -37,6 +37,7 @@ const ROUTES = new Map<string, Route[]>([
 ]);
 
 interface Seed {
+  routeId: string;
   routeName: string;
   routeColor: string | null;
   headsign: string;
@@ -48,29 +49,29 @@ const SEEDS = new Map<string, Seed[]>([
   [
     'st:1_67652',
     [
-      { routeName: '240', routeColor: 'FDB71A', headsign: 'Renton Newcastle', offsetsMin: [3, 18, 33], realtime: [true, false, false] },
-      { routeName: '550', routeColor: '2B376E', headsign: 'Seattle', offsetsMin: [7, 22], realtime: [true, true] },
+      { routeId: 'st:1_100133', routeName: '240', routeColor: 'FDB71A', headsign: 'Renton Newcastle', offsetsMin: [3, 18, 33], realtime: [true, false, false] },
+      { routeId: 'st:40_100239', routeName: '550', routeColor: '2B376E', headsign: 'Seattle', offsetsMin: [7, 22], realtime: [true, true] },
     ],
   ],
   [
     'st:40_99903',
     [
-      { routeName: '2 Line', routeColor: '0077C0', headsign: 'Redmond Technology', offsetsMin: [2, 12, 22], realtime: [true, true, false] },
-      { routeName: '2 Line', routeColor: '0077C0', headsign: 'Lynnwood City Center', offsetsMin: [5, 15], realtime: [true, false] },
+      { routeId: 'st:40_2LINE', routeName: '2 Line', routeColor: '0077C0', headsign: 'Redmond Technology', offsetsMin: [2, 12, 22], realtime: [true, true, false] },
+      { routeId: 'st:40_2LINE', routeName: '2 Line', routeColor: '0077C0', headsign: 'Lynnwood City Center', offsetsMin: [5, 15], realtime: [true, false] },
     ],
   ],
   [
     'st:1_75403',
     [
-      { routeName: '245', routeColor: '00A5D2', headsign: 'Kirkland', offsetsMin: [0, 14], realtime: [true, true] },
-      { routeName: '566', routeColor: '2B376E', headsign: 'Auburn Station', offsetsMin: [9], realtime: [false] },
+      { routeId: 'st:1_100252', routeName: '245', routeColor: '00A5D2', headsign: 'Kirkland', offsetsMin: [0, 14], realtime: [true, true] },
+      { routeId: 'st:1_100511', routeName: '566', routeColor: '2B376E', headsign: 'Auburn Station', offsetsMin: [9], realtime: [false] },
     ],
   ],
   [
     'st:95_2',
     [
-      { routeName: 'Bainbridge Ferry', routeColor: '006B54', headsign: 'Bainbridge Island', offsetsMin: [24, 74], realtime: [true, false] },
-      { routeName: 'Bremerton Ferry', routeColor: '006B54', headsign: 'Bremerton', offsetsMin: [41], realtime: [true] },
+      { routeId: 'st:95_1', routeName: 'Bainbridge Ferry', routeColor: '006B54', headsign: 'Bainbridge Island', offsetsMin: [24, 74], realtime: [true, false] },
+      { routeId: 'st:95_3', routeName: 'Bremerton Ferry', routeColor: '006B54', headsign: 'Bremerton', offsetsMin: [41], realtime: [true] },
     ],
   ],
   ['st:1_29270', []],
@@ -83,7 +84,7 @@ function tripsFor(slot: Slot, nowMs: number): Trip[] {
     seed.offsetsMin.map((offset, i) => ({
       tripId: `${slot.stopId}:${s}:${i}`,
       stopId: slot.stopId,
-      routeId: slot.routeIds[s] ?? slot.routeIds[0] ?? '',
+      routeId: seed.routeId,
       routeName: seed.routeName,
       routeColor: seed.routeColor,
       stopName: slot.stopName,

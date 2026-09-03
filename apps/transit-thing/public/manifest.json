@@ -11,7 +11,7 @@
       "data": {
         "key": "apiBaseUrl",
         "label": "Transit Tracker API base URL",
-        "pattern": "^https://",
+        "pattern": "^https://[A-Za-z0-9.-]+(:[0-9]+)?/?$",
         "minLength": null,
         "maxLength": null,
         "default": "https://tt.horner.tj/"
@@ -22,7 +22,7 @@
       "data": {
         "key": "feed",
         "label": "Feed code (st is Puget Sound)",
-        "pattern": null,
+        "pattern": "^[a-z0-9_-]{1,32}$",
         "minLength": null,
         "maxLength": null,
         "default": "st"

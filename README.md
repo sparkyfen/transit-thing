@@ -13,13 +13,14 @@ also works in the car.
 - Shows the next departures for the stops you save, with a countdown, the
   scheduled time, and a live marker when the agency sends real-time data.
 - Turn the dial to move between stops. Presets 1 to 4 jump to your first four.
-- Press the dial or tap **Find nearby stops** to pick a stop from the ones
-  around you, then choose which routes to show.
-- Shows a clock when nothing is due, and comes back when something is.
+- Press the dial or tap **Add a stop** to pick a stop from the ones around
+  you, then choose which routes to show.
+- Shows a clock after a minute without input. Press any button to get back to
+  the board.
 
 Data comes from a [Transit Tracker API](https://github.com/tjhorner/transit-tracker-api)
 server. The default is TJ Horner's public instance at `tt.horner.tj`, which
-serves 41 agencies across North America and Europe, including all of Puget
+serves dozens of agencies across North America and Europe, including all of Puget
 Sound. You can point the app at your own server in its settings.
 
 ## Install
@@ -33,14 +34,15 @@ Sound. You can point the app at your own server in its settings.
 2. Install **Transit Thing**.
 3. Open its settings to pick a feed and a server, or pick stops on the device.
 
-The app reads this device's location only when you ask for nearby stops. The
-position stays on the device and is used once to sort the list.
+The app uses this device's location once to find nearby stops, and only when
+you ask. The rounded position goes to the transit server you set
+(`tt.horner.tj` by default), and is not saved.
 
 ## Develop
 
 ```sh
 bun install
-bun run dev            # against a Car Thing connected over USB
+bun run dev            # against a connected bridgething instance
 bun run dev:device     # the same, shown on the Car Thing screen
 bun run test           # unit tests
 bun run check          # typecheck, build, and validate the catalog

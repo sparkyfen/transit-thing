@@ -83,6 +83,50 @@ describe('loading stops', () => {
     const s = reduce(picker(), { type: 'routesFailed', token: 1 });
     expect(s.screen).toMatchObject({ status: 'routesFailed', stops: [stop, stop2] });
   });
+  test('failures for another request or screen are dropped', () => {
+    expect(reduce(picker(), { type: 'stopsFailed', token: 2 }).screen).toMatchObject({ status: 'ready', stops: [stop, stop2] });
+    expect(reduce(picker(), { type: 'routesFailed', token: 2 }).screen).toMatchObject({ status: 'ready' });
+    expect(reduce(base, { type: 'stopsFailed', token: 1 }).screen.kind).toBe('board');
+    expect(reduce(base, { type: 'routesFailed', token: 1 }).screen.kind).toBe('board');
+  });
+  test('a shorter list or a failure pulls a deep cursor back into range', () => {
+    let s = picker();
+    s = reduce(reduce(s, { type: 'turn', delta: 1, at: 1 }), { type: 'turn', delta: 1, at: 2 });
+    expect(s.screen).toMatchObject({ cursor: 2 });
+    expect(reduce(s, { type: 'stops', token: 1, stops: [stop] }).screen).toMatchObject({ cursor: 1 });
+    expect(reduce(s, { type: 'stops', token: 1, stops: [] }).screen).toMatchObject({ cursor: 0 });
+    expect(reduce(s, { type: 'stopsFailed', token: 1 }).screen).toMatchObject({ cursor: 1 });
+  });
+});
+
+describe('locating', () => {
+  const far: Stop = { stopId: 'far', stopCode: '3', name: 'Far', lat: 47.7, lon: -122.3 };
+  const near: Stop = { stopId: 'near', stopCode: '1', name: 'Near', lat: 47.6151, lon: -122.1951 };
+  const mid: Stop = { stopId: 'mid', stopCode: '2', name: 'Mid', lat: 47.62, lon: -122.2 };
+  test('the location row waits while a fix is in flight and ignores a second press', () => {
+    const s = reduce(picker(), { type: 'locating', token: 1 });
+    expect(s.screen).toMatchObject({ status: 'locating', stops: [stop, stop2] });
+    expect(selectOn(s.screen)).toBeNull();
+    expect(reduce(s, { type: 'locating', token: 1 })).toBe(s);
+    expect(reduce(picker(), { type: 'locating', token: 9 }).screen).toMatchObject({ status: 'ready' });
+  });
+  test('a failed fix shows the alert and frees the row', () => {
+    const s = reduce(reduce(picker(), { type: 'locating', token: 1 }), { type: 'locateFailed', token: 1 });
+    expect(s.screen).toMatchObject({ status: 'locateFailed', stops: [stop, stop2] });
+    expect(s.origin).toBeNull();
+    expect(selectOn(s.screen)).toEqual({ kind: 'locate' });
+  });
+  test('a good fix clears the alert and sorts the stops by distance', () => {
+    let s = reduce(picker(), { type: 'stops', token: 1, stops: [far, near, mid] });
+    s = reduce(reduce(s, { type: 'locating', token: 1 }), { type: 'origin', token: 1, origin: { lat: 47.615, lon: -122.195 } });
+    expect(s.screen).toMatchObject({ status: 'ready' });
+    s = reduce(s, { type: 'stops', token: 1, stops: [far, near, mid] });
+    expect(s.screen.kind === 'picker' && s.screen.stops.map(x => x.stopId)).toEqual(['near', 'mid', 'far']);
+  });
+  test('stops keep the server order without an origin', () => {
+    const s = reduce(picker(), { type: 'stops', token: 1, stops: [far, near, mid] });
+    expect(s.screen.kind === 'picker' && s.screen.stops.map(x => x.stopId)).toEqual(['far', 'near', 'mid']);
+  });
 });
 
 describe('picking a stop', () => {
@@ -123,6 +167,20 @@ describe('picking a stop', () => {
     expect(s.screen.kind).toBe('board');
     expect(s.slots[3]).toEqual({ stopId: 's9', stopName: 'Stop 9', routeIds: ['a'] });
   });
+  test('a stop with no routes is a dead end only until back', () => {
+    const s = reduce(picker(), { type: 'openRoutes', token: 1, stop, routes: [] });
+    expect(s.screen).toMatchObject({ kind: 'routes', routes: [], cursor: 0 });
+    expect(selectOn(s.screen)).toBeNull();
+    const pressed = reduce(s, { type: 'select', at: 1 });
+    expect(pressed.screen).toMatchObject({ kind: 'routes', routes: [] });
+    expect(pressed.slots).toHaveLength(3);
+    expect(reduce(s, { type: 'turn', delta: 1, at: 2 }).screen).toMatchObject({ cursor: 0 });
+    expect(reduce(s, { type: 'back', at: 3 }).screen).toMatchObject({ kind: 'picker', status: 'ready', cursor: 1 });
+  });
+  test('mode during picking goes to ambient', () => {
+    expect(reduce(picker(), { type: 'mode', at: 1 }).screen.kind).toBe('ambient');
+    expect(reduce(routesScreen(), { type: 'mode', at: 1 }).screen.kind).toBe('ambient');
+  });
   test('saving with nothing chosen is refused', () => {
     let s = routesScreen();
     s = reduce(s, { type: 'turn', delta: -1, at: 1 });
@@ -141,7 +199,7 @@ describe('picking a stop', () => {
 
 describe('location', () => {
   test('the origin lives only while picking', () => {
-    const s = reduce(picker(), { type: 'origin', origin: { lat: 47.615, lon: -122.195 } });
+    const s = reduce(picker(), { type: 'origin', token: 1, origin: { lat: 47.615, lon: -122.195 } });
     expect(s.origin).toEqual({ lat: 47.615, lon: -122.195 });
     const onRoutes = reduce(s, { type: 'openRoutes', token: 1, stop, routes });
     expect(onRoutes.origin).not.toBeNull();

@@ -1,24 +1,21 @@
-import { useEffect, useRef } from 'react';
 import type { PickerStatus } from '../state';
+import { distanceLabel, rowTitle } from '../transit/format';
 import { haversine, type Origin } from '../transit/geo';
 import type { Route, Stop } from '../transit/types';
 import { RouteBadge } from './RouteBadge';
 
-function distanceLabel(meters: number): string {
-  if (meters < 1000) return `${Math.round(meters / 10) * 10} m`;
-  return `${(meters / 1000).toFixed(1)} km`;
+// dom focus follows the dial cursor: the cursor row takes focus as soon as it attaches
+function focusOnAttach(el: HTMLElement | null) {
+  if (!el) return;
+  el.focus({ preventScroll: true });
+  el.scrollIntoView({ block: 'nearest' });
 }
 
-// dom focus follows the dial cursor so the focused row is the highlighted one
-function useCursorFocus(cursor: number, rows: number) {
-  const ref = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.focus({ preventScroll: true });
-    el.scrollIntoView({ block: 'nearest' });
-  }, [cursor, rows]);
-  return ref;
+function useCursorFocus(cursor: number) {
+  return (i: number) =>
+    i === cursor
+      ? { ref: focusOnAttach, tabIndex: 0, 'aria-current': 'true' as const }
+      : { ref: null, tabIndex: -1, 'aria-current': undefined };
 }
 
 function rowClass(active: boolean): string {
@@ -38,31 +35,35 @@ interface StopsProps {
 }
 
 export function StopPicker({ stops, cursor, status, origin, onLocate, onRetry, onPick }: StopsProps) {
-  const ref = useCursorFocus(cursor, stops.length + (status === 'stopsFailed' ? 1 : 0));
-  const rowProps = (i: number) => ({ ref: i === cursor ? ref : null, tabIndex: i === cursor ? 0 : -1, 'aria-current': i === cursor ? ('true' as const) : undefined });
+  const rowProps = useCursorFocus(cursor);
+  const message = status === 'loading' ? 'Loading stops' : status !== 'stopsFailed' && stops.length === 0 ? 'No stops found near you.' : null;
   return (
     <main className="flex h-full w-full flex-col bg-bg text-off-white">
       <header className="px-8 pt-6 pb-2">
         <div className="font-mono text-hint tracking-[0.25em] text-soft uppercase">Stops near you</div>
         <h1 className="m-0 font-display text-screen-title font-medium tracking-display">Pick a stop</h1>
-        <p className="m-0 mt-1 text-hint text-soft">Uses this device's location to sort stops by distance. It stays on the device.</p>
+        <p className="m-0 mt-1 text-hint text-soft">
+          Uses this device's location once to find nearby stops. The rounded position goes to the transit server you set, and is not saved.
+        </p>
       </header>
       <ol className="m-0 flex min-h-0 flex-1 list-none flex-col overflow-y-auto px-8">
         <li>
-          <button {...rowProps(0)} className={rowClass(cursor === 0)} onClick={onLocate}>
-            <span className="text-row-lg">Use my location</span>
+          <button {...rowProps(0)} className={rowClass(cursor === 0)} onClick={onLocate} aria-disabled={status === 'locating'}>
+            <span className="text-row-lg">{status === 'locating' ? 'Finding your location' : 'Use my location'}</span>
           </button>
         </li>
-        {status === 'loading' ? (
-          <li className="py-10 text-center text-row-lg text-soft">Loading stops</li>
-        ) : status === 'stopsFailed' ? (
+        <li role="status" className={message ? 'py-10 text-center text-row-lg text-soft' : 'sr-only'}>
+          {message}
+        </li>
+        {status === 'stopsFailed' ? (
           <li>
+            <p className="m-0 px-3 py-2 font-mono text-hint text-warn" role="alert">
+              Couldn't load stops.
+            </p>
             <button {...rowProps(1)} className={rowClass(cursor === 1)} onClick={onRetry}>
-              <span className="text-row-lg">Couldn't load stops. Try again.</span>
+              <span className="text-row-lg">Try again</span>
             </button>
           </li>
-        ) : stops.length === 0 ? (
-          <li className="py-10 text-center text-row-lg text-soft">No stops found near you.</li>
         ) : (
           stops.map((stop, i) => (
             <li key={stop.stopId}>
@@ -76,9 +77,9 @@ export function StopPicker({ stops, cursor, status, origin, onLocate, onRetry, o
           ))
         )}
       </ol>
-      {status === 'routesFailed' ? (
+      {status === 'routesFailed' || status === 'locateFailed' ? (
         <p className="m-0 px-8 py-2 font-mono text-hint text-warn" role="alert">
-          Couldn't load routes for that stop. Try again.
+          {status === 'locateFailed' ? "Couldn't get this device's location." : "Couldn't load routes for that stop. Try again."}
         </p>
       ) : null}
       <footer className="flex justify-between gap-6 border-t border-rule px-8 pt-3 pb-4 font-mono text-hint text-soft">
@@ -100,9 +101,9 @@ interface RoutesProps {
 
 export function RoutePicker({ stop, routes, cursor, chosen, onToggle, onSave }: RoutesProps) {
   const saveRow = routes.length;
-  const ref = useCursorFocus(cursor, routes.length);
-  const rowProps = (i: number) => ({ ref: i === cursor ? ref : null, tabIndex: i === cursor ? 0 : -1, 'aria-current': i === cursor ? ('true' as const) : undefined });
+  const rowProps = useCursorFocus(cursor);
   const saveLabel = chosen.length === 1 ? 'Save this route' : chosen.length > 1 ? `Save ${chosen.length} routes` : 'Save';
+  const canSave = chosen.length > 0;
   return (
     <main className="flex h-full w-full flex-col bg-bg text-off-white">
       <header className="px-8 pt-6 pb-2">
@@ -111,41 +112,52 @@ export function RoutePicker({ stop, routes, cursor, chosen, onToggle, onSave }: 
           Pick routes
         </h1>
       </header>
-      <div role="group" aria-labelledby="routes-title" className="min-h-0 flex-1 overflow-y-auto px-8">
-        <ol className="m-0 list-none">
-          {routes.map((route, i) => {
-            const on = chosen.includes(route.routeId);
-            return (
-              <li key={route.routeId}>
-                <button {...rowProps(i)} role="checkbox" aria-checked={on} className={rowClass(i === cursor)} onClick={() => onToggle(route.routeId)}>
-                  <span className={`grid h-6 w-6 shrink-0 place-items-center border ${on ? 'border-accent bg-accent text-screen' : 'border-edge'}`} aria-hidden="true">
-                    {on ? '✓' : ''}
-                  </span>
-                  <RouteBadge name={route.name} color={route.color} headsign={route.headsigns.join(' ')} size="sm" />
-                  <span className="truncate text-row text-soft">{route.headsigns.join(' · ')}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      </div>
-      <div className="flex items-center justify-between gap-6 border-t border-rule px-8 py-3">
-        <span id="save-hint" className="font-mono text-hint text-soft">
-          {chosen.length === 0 ? 'Choose at least one route' : `${chosen.length} of ${routes.length} chosen`}
-        </span>
-        <button
-          {...rowProps(saveRow)}
-          aria-disabled={chosen.length === 0}
-          aria-describedby="save-hint"
-          className={`border px-4 py-2 font-mono text-row-lg outline-none aria-disabled:opacity-40 ${
-            cursor === saveRow ? 'border-accent bg-accent text-screen' : 'border-edge text-near'
-          }`}
-          onClick={() => chosen.length > 0 && onSave()}>
-          {saveLabel}
-        </button>
-      </div>
+      {routes.length === 0 ? (
+        <div role="status" className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center">
+          <p className="m-0 text-row-lg text-soft">No routes serve this stop</p>
+          <p className="m-0 font-mono text-hint text-soft">Back returns to stops</p>
+        </div>
+      ) : (
+        <>
+          <div role="group" aria-labelledby="routes-title" className="min-h-0 flex-1 overflow-y-auto px-8">
+            <ol className="m-0 list-none">
+              {routes.map((route, i) => {
+                const on = chosen.includes(route.routeId);
+                return (
+                  <li key={route.routeId}>
+                    <button {...rowProps(i)} role="checkbox" aria-checked={on} className={rowClass(i === cursor)} onClick={() => onToggle(route.routeId)}>
+                      <span
+                        className={`grid h-6 w-6 shrink-0 place-items-center ${on ? 'border border-accent bg-accent text-screen' : 'border-2 border-soft'}`}
+                        aria-hidden="true">
+                        {on ? '✓' : ''}
+                      </span>
+                      <RouteBadge name={route.name} color={route.color} headsign={route.headsigns.join(' ')} size="sm" />
+                      <span className="truncate text-row text-soft">{rowTitle(route.name, route.headsigns.join(' · '))}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+          <div className="flex items-center justify-between gap-6 border-t border-rule px-8 py-3">
+            <span id="save-hint" className="font-mono text-hint text-soft">
+              {canSave ? `${chosen.length} of ${routes.length} chosen` : 'Choose at least one route'}
+            </span>
+            <button
+              {...rowProps(saveRow)}
+              aria-disabled={!canSave}
+              aria-describedby="save-hint"
+              className={`border px-4 py-2 font-mono text-row-lg outline-none ${
+                cursor !== saveRow ? 'border-edge text-near' : canSave ? 'border-accent bg-accent text-screen' : 'border-accent text-near'
+              }`}
+              onClick={() => canSave && onSave()}>
+              {saveLabel}
+            </button>
+          </div>
+        </>
+      )}
       <footer className="flex justify-between gap-6 px-8 pb-4 font-mono text-hint text-soft">
-        <span>Turn the dial to move, press it to tick a route</span>
+        <span>Turn the dial to move, press it to choose</span>
         <span>Back returns to stops</span>
       </footer>
     </main>
